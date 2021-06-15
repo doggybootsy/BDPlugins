@@ -2,24 +2,25 @@
  * @name Removenorole
  * @author Doggybootsy
  * @description Remove the "NO ROLES" from user popouts
- * @version 1
+ * @version 1.1
  */
 
 module.exports = class Remove_no_role{
     start() {
-        BdApi.injectCSS("Removenorole", '.Removenorole{display: none;}')
+        const remove_no_role_layer = document.querySelector('#app-mount>div+.layerContainer-yqaFcK');
+        remove_no_role_layer.setAttribute('Removenorole','')
         if(window.addEventListener) {
            // Normal browsers
-           document.querySelector('#app-mount>div+.layerContainer-yqaFcK').addEventListener('DOMSubtreeModified', contentChanged, false);
+           document.querySelector('#app-mount>div+.layerContainer-yqaFcK[Removenorole]').addEventListener('DOMSubtreeModified', contentChanged, false);
         }
         function contentChanged() {
-            const remove_no_role = document.querySelector('.root-3-B5F3:empty')
+            const remove_no_role = document.querySelector('[Removenorole] .root-3-B5F3:empty')
             if (!remove_no_role) return;
-            remove_no_role.previousSibling.classList.add('Removenorole')
-            remove_no_role.classList.add('Removenorole')
+            remove_no_role.previousSibling.style.display = "none"
+            remove_no_role.style.display = "none"
         }
     }
     stop() {
-        BdApi.injectCSS("Removenorole", '')
+        document.querySelector('#app-mount>div+.layerContainer-yqaFcK').removeAttribute('Removenorole')
     }
 }
