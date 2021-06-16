@@ -5,17 +5,16 @@
  * @version 1.1
  */
 
+
 module.exports = class Remove_no_role{
     start() {
-        const remove_no_role_layer = document.querySelector('#app-mount>div+.layerContainer-yqaFcK');
-        if (!remove_no_role_layer) return;
-        remove_no_role_layer.setAttribute('Removenorole','')
+        document.querySelector('#app-mount>div+.layerContainer-yqaFcK').setAttribute('Removenorole','')
         if(window.addEventListener) {
            // Normal browsers
-           document.querySelector('#app-mount>div+.layerContainer-yqaFcK[Removenorole]').addEventListener('DOMSubtreeModified', contentChanged, false);
+           document.querySelector('#app-mount>div+.layerContainer-yqaFcK[Removenorole]').addEventListener('DOMSubtreeModified', Remove_no_role, false);
         }
-        function contentChanged() {
-            const remove_no_role = document.querySelector('[Removenorole] .root-3-B5F3:empty')
+        function Remove_no_role() {
+            const remove_no_role = document.querySelector('[Removenorole] .userPopout-xaxa6l .root-3-B5F3:empty')
             if (!remove_no_role) return;
             remove_no_role.previousSibling.style.display = "none"
             remove_no_role.style.display = "none"
