@@ -8,6 +8,7 @@
 module.exports = class Remove_no_role{
     start() {
         const remove_no_role_layer = document.querySelector('#app-mount>div+.layerContainer-yqaFcK');
+        if (!remove_no_role_layer) return;
         remove_no_role_layer.setAttribute('Removenorole','')
         if(window.addEventListener) {
            // Normal browsers
