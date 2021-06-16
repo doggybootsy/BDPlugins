@@ -19,7 +19,7 @@ module.exports = class GuildClock{
         document.querySelector('[guildclock] .tutorialContainer-2sGCg9').insertAdjacentHTML('afterend', '<div id="guildclock"></div>');
         // Time stuff
         function GuildClock_time_stuff(){
-            const GuildClock_time = new Date('2012-01-13T11:03');
+            const GuildClock_time = new Date();
             const GuildClock_time_Hour = GuildClock_time.getHours() > 12 ? GuildClock_time.getHours() - 12 : GuildClock_time.getHours();
             const GuildClock_time_Minute = (GuildClock_time.getMinutes()<10?'0':'') + GuildClock_time.getMinutes();
             // Insert time
