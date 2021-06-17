@@ -7,6 +7,9 @@
  * @website https://doggybootsy.github.io/
  */
 
+// sticky to have it sticky | blank for normal
+const GuildClock_mode = "sticky"
+
 module.exports = class GuildClock{
     getName() {
       return "Guild Clock";
@@ -28,7 +31,7 @@ module.exports = class GuildClock{
             });
         }
         // Create Element
-        document.querySelector('[guildclock] .tutorialContainer-2sGCg9').insertAdjacentHTML('afterend', '<div id="guildclock" class="listItem-GuPuDH"></div>');
+        document.querySelector('[guildclock] .tutorialContainer-2sGCg9').insertAdjacentHTML('afterend', '<div id="guildclock" class="listItem-GuPuDH '+GuildClock_mode+'"></div>');
         // Time stuff
         function GuildClock_time_stuff(){
             const GuildClock_time = new Date();
