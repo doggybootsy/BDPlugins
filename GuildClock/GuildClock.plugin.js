@@ -2,17 +2,24 @@
  * @name GuildClock
  * @author Doggybootsy
  * @description Adds a clock in the guild's column
- * @version 1.1
+ * @version 1
+ * @source https://github.com/doggybootsy/BDPlugins/
+ * @website https://doggybootsy.github.io/
  */
 
 module.exports = class GuildClock{
+    getName() {
+      return "Guild Clock";
+    }
+    
     start() {
         // Css | Can easily get changed to other apis
         BdApi.injectCSS(
             "GuildClock",
-            '#guildclock{color: var(--text-normal); text-align: center; font-size: 1rem} #guildclock::after{content: " " attr(pm_am);}'
+            '#guildclock{color: var(--text-normal); text-align: center; font-size: 1rem} #guildclock::after{content: " " attr(pm_am);}#guildclock.sticky{position: sticky;top: 0;z-index: 1;background-color: var(--background-tertiary);padding-top: 4px; padding-bottom: 8px; margin: 0;}'
         );
-        // Add Attribute | My vanilla way of doing stuff
+        
+        // Add Attribute
         document.getElementsByClassName('guilds-1SWlCJ')[0].setAttribute('guildclock','');
         // Remove extra guildclock element
         if(document.getElementsByClassName('guilds-1SWlCJ')[0].innerHTML.includes('id="guildclock"')){
@@ -22,7 +29,7 @@ module.exports = class GuildClock{
         }
         // Create Element
         document.querySelector('[guildclock] .tutorialContainer-2sGCg9').insertAdjacentHTML('afterend', '<div id="guildclock" class="listItem-GuPuDH"></div>');
-        // Time stuff | Does the functions and place the time
+        // Time stuff
         function GuildClock_time_stuff(){
             const GuildClock_time = new Date();
             const GuildClock_time_Hour = GuildClock_time.getHours() > 12 ? GuildClock_time.getHours() - 12 : GuildClock_time.getHours();
@@ -36,11 +43,13 @@ module.exports = class GuildClock{
             }
         }
         setInterval(GuildClock_time_stuff, 10000);
-        // Add copy time | Copy time and pm/am indicator
+        // Add copy time
         setTimeout(function(){
             document.querySelector('#guildclock').addEventListener("click", () => {
                 const GuildClock_copy_string = document.getElementById('guildclock').innerText+document.getElementById('guildclock').getAttribute('pm_am')
+                if (!GuildClock_copy_string) return;
                 const GuildClock_copy_element = document.createElement('textarea');
+                if (!GuildClock_copy_element) return;
                 GuildClock_copy_element.value = GuildClock_copy_string;
                 GuildClock_copy_element.setAttribute('readonly', '');
                 GuildClock_copy_element.style.position = 'absolute';
