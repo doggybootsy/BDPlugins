@@ -2,7 +2,7 @@
  * @name RemoveNoRole
  * @author Doggybootsy
  * @description Remove the "NO ROLES" from user popouts
- * @version 1.2
+ * @version 1.3
  * @source https://github.com/doggybootsy/BDPlugins/
  * @website https://doggybootsy.github.io/
  */
@@ -11,20 +11,20 @@ module.exports = class Remove_no_role{
     getName() {
       return "Remove No Role";
     }
-
     start() {
-        document.querySelector('#app-mount>div+.layerContainer-yqaFcK').setAttribute('Removenorole','')
+        document.querySelector('#app-mount>div+.layerContainer-yqaFcK').setAttribute('removenorole','')
         if(window.addEventListener) {
-           document.querySelector('#app-mount>div+.layerContainer-yqaFcK[Removenorole]').addEventListener('DOMSubtreeModified', Remove_no_role, false);
+           // Normal browsers
+           document.querySelector('#app-mount>div+.layerContainer-yqaFcK[removenorole]').addEventListener('DOMSubtreeModified', Remove_no_role, false);
         }
         function Remove_no_role() {
-            if (document.querySelector('#app-mount>div+.layerContainer-yqaFcK').innerHTML.includes('userPopout-')) {
-                document.querySelector('[Removenorole] .userPopout-xaxa6l .root-3-B5F3:empty').previousSibling.style.display = "none"
-                document.querySelector('[Removenorole] .userPopout-xaxa6l .root-3-B5F3:empty').style.display = "none"
+            if (document.body.contains(document.querySelector('[removenorole] .root-3-B5F3:empty'))) {
+                document.querySelector('[removenorole] .userPopout-xaxa6l .root-3-B5F3:empty').previousSibling.setAttribute('style','display: none !important')
+                document.querySelector('[removenorole] .userPopout-xaxa6l .root-3-B5F3:empty').setAttribute('style','display: none !important')
             }
         }
     }
     stop() {
-        document.querySelector('#app-mount>div+.layerContainer-yqaFcK').removeAttribute('Removenorole')
+        document.querySelector('#app-mount>div+.layerContainer-yqaFcK').removeAttribute('removenorole')
     }
 }
