@@ -2,7 +2,7 @@
  * @name GuildClock
  * @author Doggybootsy
  * @description Adds a clock in the guild's column
- * @version 1
+ * @version 1.1
  */
 
 module.exports = class GuildClock{
@@ -12,7 +12,7 @@ module.exports = class GuildClock{
             "GuildClock",
             '#guildclock{color: var(--text-normal); text-align: center; font-size: 1rem} #guildclock::after{content: " " attr(pm_am);}'
         );
-        // Add Attribute
+        // Add Attribute | My vanilla way of doing stuff
         document.getElementsByClassName('guilds-1SWlCJ')[0].setAttribute('guildclock','');
         // Remove extra guildclock element
         if(document.getElementsByClassName('guilds-1SWlCJ')[0].innerHTML.includes('id="guildclock"')){
@@ -22,7 +22,7 @@ module.exports = class GuildClock{
         }
         // Create Element
         document.querySelector('[guildclock] .tutorialContainer-2sGCg9').insertAdjacentHTML('afterend', '<div id="guildclock" class="listItem-GuPuDH"></div>');
-        // Time stuff
+        // Time stuff | Does the functions and place the time
         function GuildClock_time_stuff(){
             const GuildClock_time = new Date();
             const GuildClock_time_Hour = GuildClock_time.getHours() > 12 ? GuildClock_time.getHours() - 12 : GuildClock_time.getHours();
@@ -36,7 +36,7 @@ module.exports = class GuildClock{
             }
         }
         setInterval(GuildClock_time_stuff, 10000);
-        // Add copy time
+        // Add copy time | Copy time and pm/am indicator
         setTimeout(function(){
             document.querySelector('#guildclock').addEventListener("click", () => {
                 const GuildClock_copy_string = document.getElementById('guildclock').innerText+document.getElementById('guildclock').getAttribute('pm_am')
