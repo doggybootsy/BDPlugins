@@ -13,10 +13,9 @@ module.exports = class Remove_no_role{
     }
 
     observer (mutations) {
-        const Remove_no_role_selector = document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty');
-        if (document.body.contains(Remove_no_role_selector)) {
-            Remove_no_role_selector.previousSibling.remove();
-            Remove_no_role_selector.remove();
+        if (document.body.contains(document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty'))) {
+            document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty').previousSibling.remove();
+            document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty').remove();
         };
     };
 
