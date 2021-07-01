@@ -13,7 +13,7 @@ module.exports = class Remove_no_role{
     }
 
     observer (mutations) {
-        if (document.body.contains(document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty'))) {
+        if (document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty')) {
             document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty').previousSibling.remove();
             document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty').remove();
         };
