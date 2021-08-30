@@ -3,11 +3,9 @@
  * @displayName BackUpCustomCSS
  * @description Back up custom css in a seperate file
  * @author doggybootsy
- * @version 1.0.0
  * @source https://github.com/doggybootsy/BDPlugins/
  * @website https://doggybootsy.github.io/
- * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackUpCustomCSS/BackUpCustomCSS.plugin.js
-*/
+ */
 
 const {env: {DISCORD_RELEASE_CHANNEL}} = process
 const PluginFolder = BdApi.Plugins.folder
@@ -15,14 +13,26 @@ const {error} = console
 const {existsSync,mkdirSync,writeFile,rmdir} = require("fs")
 const {shell: {openPath}} = require('electron')
 const {join} = require("path")
-const {showToast, React, Plugins: {get}} = BdApi
+const {showToast, React, Plugins: {get}, showConfirmationModal} = BdApi
 const Button = BdApi.findModuleByProps('DropdownSizes')
 const {ButtonLooks, ButtonColors} = BdApi.findModuleByProps("ButtonLooks")
 module.exports = class BackUpCustomCSS{
     getName() {return "Back up custom CSS"}
-    getVersion() {return "1.0.0"}
+    getVersion() {return "1.0.1"}
+    start() {
+        if (global.ZLibrary.PluginUpdater) 
+            global.ZLibrary.PluginUpdater.checkForUpdate(this.getName(), this.getVersion(), "https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackUpCustomCSS/BackUpCustomCSS.plugin.js")
+        if (!existsSync(join(PluginFolder, "BackUpCustomCSS"))) 
+            mkdirSync(join(PluginFolder, "BackUpCustomCSS"))
+        if (!existsSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
+            mkdirSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))
+    }
+    stop() {
+        if (document.getElementById("BackUpCustomCSS")) 
+            document.getElementById("BackUpCustomCSS").remove()
+    }
     observer() {
-        if (document.getElementById("floating-editor-window") && !document.getElementById("BackUpCustomCSS")) {
+        if (document.getElementById("bd-editor-controls") && !document.getElementById("BackUpCustomCSS")) {
             const ele = document.createElement('button')
             ele.id = "BackUpCustomCSS"
             ele.classList = "btn btn-primary"
@@ -44,18 +54,6 @@ module.exports = class BackUpCustomCSS{
             document.querySelector("#bd-editor-controls>.controls-section.controls-left").appendChild(ele)
         }
     }
-    start() {
-        if (global.ZLibrary.PluginUpdater) 
-            global.ZLibrary.PluginUpdater.checkForUpdate(this.getName(), this.getVersion(), get("BackUpCustomCSS").updateUrl)
-        if (!existsSync(join(PluginFolder, "BackUpCustomCSS"))) 
-            mkdirSync(join(PluginFolder, "BackUpCustomCSS"))
-        if (!existsSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
-            mkdirSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))
-    }
-    stop() {
-        if (document.getElementById("BackUpCustomCSS")) 
-            document.getElementById("BackUpCustomCSS").remove()
-    }
     getSettingsPanel() {
         return React.createElement("div", {
             children: [
@@ -67,13 +65,25 @@ module.exports = class BackUpCustomCSS{
                     color: ButtonColors.RED,
                     look: ButtonLooks.OUTLINED,
                     onClick: () => {
-                        rmdir(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL), { recursive: true }, (err) => {
-                            if (err) {
-                                BdApi.alert('Couldnt backup css', `\`\`\`js\n${err}\n\`\`\``)
-                                error(err)
+                        showConfirmationModal("Want to delete all backup's?", 
+                            [
+                                "You might not be able to get the backup's again"
+                            ],
+                            {
+                                danger: true,
+                                confirmText: "Delete",
+                                cancelText: "Go Back",
+                                onConfirm: () => {
+                                    rmdir(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL), { recursive: true }, (err) => {
+                                        if (err) {
+                                            BdApi.alert('Couldnt backup css', `\`\`\`js\n${err}\n\`\`\``)
+                                            error(err)
+                                        }
+                                        else showToast("Successfully deleted backup(s)", {type:"info", icon: true})
+                                    })
+                                }
                             }
-                            else showToast("Successfully deleted backup(s)", {type:"info", icon: true})
-                        })
+                        )
                     }
                 }, "Delete backup(s)")
             ]
