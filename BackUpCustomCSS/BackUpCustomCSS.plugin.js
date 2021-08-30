@@ -20,8 +20,6 @@ module.exports = class BackUpCustomCSS{
     getName() {return "Back up custom CSS"}
     getVersion() {return "1.0.1"}
     start() {
-        if (global.ZLibrary.PluginUpdater) 
-            global.ZLibrary.PluginUpdater.checkForUpdate(this.getName(), this.getVersion(), "https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackUpCustomCSS/BackUpCustomCSS.plugin.js")
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS"))) 
             mkdirSync(join(PluginFolder, "BackUpCustomCSS"))
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
@@ -79,7 +77,7 @@ module.exports = class BackUpCustomCSS{
                                             BdApi.alert('Couldnt backup css', `\`\`\`js\n${err}\n\`\`\``)
                                             error(err)
                                         }
-                                        else showToast("Successfully deleted backup(s)", {type:"info", icon: true})
+                                        else showToast("Successfully deleted backup(s)", {type:"warning", icon: true})
                                     })
                                 }
                             }
