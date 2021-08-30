@@ -18,7 +18,7 @@ const Button = BdApi.findModuleByProps('DropdownSizes')
 const {ButtonLooks, ButtonColors} = BdApi.findModuleByProps("ButtonLooks")
 module.exports = class BackUpCustomCSS{
     getName() {return "Back up custom CSS"}
-    getVersion() {return "1.0.2"}
+    getVersion() {return "1.0.3"}
     backup() {
         const time = `${new Date()}`.split(" ")
         writeFile(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL, `BackUpCustomCSS-(${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}).css`), `/*\n    CustomCSS backup ${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}\n*/\n${join(PluginFolder, "../data", DISCORD_RELEASE_CHANNEL, "custom.css")}`, function (err) {
