@@ -10,7 +10,7 @@
 const {env: {DISCORD_RELEASE_CHANNEL}} = process
 const PluginFolder = BdApi.Plugins.folder
 const {error} = console
-const {existsSync,mkdirSync,writeFile,rmdir} = require("fs")
+const {existsSync,mkdirSync,writeFile,rmdir,readFile} = require("fs")
 const {shell: {openPath}} = require('electron')
 const {join} = require("path")
 const {showToast, React, Plugins: {get}, showConfirmationModal} = BdApi
@@ -18,20 +18,28 @@ const Button = BdApi.findModuleByProps('DropdownSizes')
 const {ButtonLooks, ButtonColors} = BdApi.findModuleByProps("ButtonLooks")
 module.exports = class BackUpCustomCSS{
     getName() {return "Back up custom CSS"}
-    getVersion() {return "1.0.3"}
+    getVersion() {return "1.0.4"}
     backup() {
         const time = `${new Date()}`.split(" ")
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS"))) 
             mkdirSync(join(PluginFolder, "BackUpCustomCSS"))
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
             mkdirSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))
-        writeFile(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL, `BackUpCustomCSS-(${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}).css`), `/*\n    CustomCSS backup ${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}\n*/\n${join(PluginFolder, "../data", DISCORD_RELEASE_CHANNEL, "custom.css")}`, function (err) {
+        let css
+        readFile(join(PluginFolder, "../data", DISCORD_RELEASE_CHANNEL, "custom.css"), 'utf8', (err, data) => {
             if (err) {
-                BdApi.alert('Couldnt backup css', `\`\`\`js\n${err}\n\`\`\``)
+                BdApi.alert('Couldnt read custom css', `\`\`\`js\n${err}\n\`\`\``)
                 error(err)
+            } else {
+                writeFile(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL, `BackUpCustomCSS-(${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}).css`), `/*\n    CustomCSS backup ${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}\n*/\n${data}`, function (err) {
+                    if (err) {
+                        BdApi.alert('Couldnt backup css', `\`\`\`js\n${err}\n\`\`\``)
+                        error(err)
+                    }
+                    else showToast("CSS successfully backed up", {type:"info", icon: true})
+                })
             }
-            else showToast("CSS successfully backed up", {type:"info", icon: true})
-        });
+        })
     }
     start() {
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS"))) 
