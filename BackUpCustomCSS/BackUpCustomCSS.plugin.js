@@ -16,7 +16,7 @@ const {env: {DISCORD_RELEASE_CHANNEL}} = process,
       {ButtonLooks, ButtonColors} = BdApi.findModuleByProps("ButtonLooks")
 module.exports = class BackUpCustomCSS{
     getName() {return "Back up custom CSS"}
-    getVersion() {return "1.0.9"}
+    getVersion() {return "1.1.0"}
     backup() {
         if (!existsSync(join(folder, "BackUpCustomCSS"))) 
             mkdirSync(join(folder, "BackUpCustomCSS"))
@@ -29,7 +29,7 @@ module.exports = class BackUpCustomCSS{
             } else {
                 const date = new Date(),
                       time = `${date}`.split(" ")
-                writeFile(join(folder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL, `BackUpCustomCSS-(${time[0]} ${time[1]} ${time[2]} ${time[3]} ${date.getHours()} ${date.getMinutes()} ${date.getMilliseconds()}).css`), `/*\n    CustomCSS backup ${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}\n*/\n${data}`, function (err) {
+                writeFile(join(folder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL, `BackUpCustomCSS-(${time[0]} ${time[1]} ${time[2]} ${time[3]} ${date.getHours()} ${date.getMinutes()} ${date.getSeconds()} ${date.getMilliseconds()}).css`), `/*\n    CustomCSS backup ${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}\n*/\n${data}`, function (err) {
                     if (err) {
                         alert('Couldnt backup css', `\`\`\`js\n${err}\n\`\`\``)
                         error(err)
