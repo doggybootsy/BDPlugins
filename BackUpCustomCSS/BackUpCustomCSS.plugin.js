@@ -16,19 +16,20 @@ const Button = BdApi.findModuleByProps('DropdownSizes')
 const {ButtonLooks, ButtonColors} = BdApi.findModuleByProps("ButtonLooks")
 module.exports = class BackUpCustomCSS{
     getName() {return "Back up custom CSS"}
-    getVersion() {return "1.0.6"}
+    getVersion() {return "1.0.8"}
     backup() {
-        const time = `${new Date()}`.split(" ")
         if (!existsSync(join(folder, "BackUpCustomCSS"))) 
             mkdirSync(join(folder, "BackUpCustomCSS"))
         if (!existsSync(join(folder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
             mkdirSync(join(folder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))
-        readFile(join(folder, "../data", DISCORD_RELEASE_CHANNEL, "custom.css"), 'utf8', (err, data) => {
+        readFile(join(folder, "..", "data", DISCORD_RELEASE_CHANNEL, "custom.css"), 'utf8', (err, data) => {
             if (err) {
                 alert('Couldnt read custom css', `\`\`\`js\n${err}\n\`\`\``)
                 error(err)
             } else {
-                writeFile(join(folder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL, `BackUpCustomCSS-(${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}).css`), `/*\n    CustomCSS backup ${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}\n*/\n${data}`, function (err) {
+                const date = new Date()
+                const time = `${date}`.split(" ")
+                writeFile(join(folder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL, `BackUpCustomCSS-(${time[0]} ${time[1]} ${time[2]} ${time[3]} ${date.getHours()} ${date.getMinutes()} ${date.getMilliseconds()}).css`), `/*\n    CustomCSS backup ${time[0]} ${time[1]} ${time[2]} ${time[3]} ${time[4]}\n*/\n${data}`, function (err) {
                     if (err) {
                         alert('Couldnt backup css', `\`\`\`js\n${err}\n\`\`\``)
                         error(err)
@@ -107,9 +108,7 @@ module.exports = class BackUpCustomCSS{
                         confirmText: "Close",
                         cancelText: null
                     })
-                } else {
-                    this.backup()
-                }
+                } else this.backup()
             }
             document.querySelector("#bd-editor-controls>.controls-section.controls-left").appendChild(ele)
         }
