@@ -13,19 +13,18 @@ const {error} = console
 const {existsSync,mkdirSync,writeFile,rmdir,readFile} = require("fs")
 const {shell: {openPath}} = require('electron')
 const {join} = require("path")
-const {showToast, React, Plugins: {get}, showConfirmationModal} = BdApi
+const {showToast, React: {createElement}, showConfirmationModal} = BdApi
 const Button = BdApi.findModuleByProps('DropdownSizes')
 const {ButtonLooks, ButtonColors} = BdApi.findModuleByProps("ButtonLooks")
 module.exports = class BackUpCustomCSS{
     getName() {return "Back up custom CSS"}
-    getVersion() {return "1.0.4"}
+    getVersion() {return "1.0.5"}
     backup() {
         const time = `${new Date()}`.split(" ")
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS"))) 
             mkdirSync(join(PluginFolder, "BackUpCustomCSS"))
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
             mkdirSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))
-        let css
         readFile(join(PluginFolder, "../data", DISCORD_RELEASE_CHANNEL, "custom.css"), 'utf8', (err, data) => {
             if (err) {
                 BdApi.alert('Couldnt read custom css', `\`\`\`js\n${err}\n\`\`\``)
@@ -42,6 +41,8 @@ module.exports = class BackUpCustomCSS{
         })
     }
     start() {
+        if(global.ZeresPluginLibrary)
+            ZeresPluginLibrary.PluginUpdater.checkForUpdate(this.getName(), this.getVersion(), "https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackUpCustomCSS/BackUpCustomCSS.plugin.js")
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS"))) 
             mkdirSync(join(PluginFolder, "BackUpCustomCSS"))
         if (!existsSync(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
@@ -62,22 +63,23 @@ module.exports = class BackUpCustomCSS{
         }
     }
     getSettingsPanel() {
-        return React.createElement("div", {
+        return createElement("div", {
             children: [
-                React.createElement("div", {
+                createElement("div", {
                     style: {display: "flex"},
                     children: [
-                        React.createElement(Button, {
+                        createElement(Button, {
                             onClick: () => openPath(join(PluginFolder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))
                         }, "Open backup folder"),
-                        React.createElement("div", {style: {width: "50px"}}, ""),
-                        React.createElement(Button, {
+                        createElement("div", {style: {width: "4rem"}}, ""),
+                        createElement(Button, {
+                            style: {width: "fit-content"},
                             onClick: () => this.backup()
                         }, "Backup Custom CSS")
                     ]
                 }),
-                React.createElement("div", {style: {height: "50px"}}, ""),
-                React.createElement(Button, {
+                createElement("div", {style: {height: "50px"}}, ""),
+                createElement(Button, {
                     color: ButtonColors.RED,
                     look: ButtonLooks.OUTLINED,
                     onClick: () => {
