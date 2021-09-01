@@ -62,7 +62,7 @@ module.exports = class BackUpCustomCSS{
     }
     start() {
         if(global.ZeresPluginLibrary)
-            ZeresPluginLibrary.PluginUpdater.checkForUpdate(this.getName(), this.getVersion(), "https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackUpCustomCSS/BackUpCustomCSS.plugin.js")
+            ZeresPluginLibrary.PluginUpdater.checkForUpdate(this.getName(), this.getVersion(), "https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackupCustomCSS/BackupCustomCSS.plugin.js")
         if (!existsSync(join(folder, "BackUpCustomCSS"))) 
             mkdirSync(join(folder, "BackUpCustomCSS"))
         if (!existsSync(join(folder, "BackUpCustomCSS", DISCORD_RELEASE_CHANNEL))) 
