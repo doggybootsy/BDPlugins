@@ -16,7 +16,7 @@ const {env: {DISCORD_RELEASE_CHANNEL}} = process,
       {ButtonLooks, ButtonColors} = BdApi.findModuleByProps("ButtonLooks")
 module.exports = class BackupCustomCSS{
     getName() {return "Backup custom CSS"}
-    getVersion() {return "1.1.3"}
+    getVersion() {return "1.1.4"}
     backup() {
         if (!existsSync(join(folder, "BackupCustomCSS"))) 
             mkdirSync(join(folder, "BackupCustomCSS"))
