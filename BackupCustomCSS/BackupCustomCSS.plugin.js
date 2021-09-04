@@ -7,13 +7,33 @@
  */
 
 let {env: {DISCORD_RELEASE_CHANNEL}} = process,
-    {showToast, React: {createElement}, showConfirmationModal, alert, Plugins: {get, folder, disable}} = BdApi,
+    {showToast, React: {createElement, Component}, showConfirmationModal, alert, saveData, loadData, Plugins: {get, folder}} = BdApi,
     {error} = console,
     {existsSync,mkdirSync,writeFile,rmdir,readFile} = require("fs"),
     {shell: {openPath}} = require("electron"),
     {join} = require("path"),
     Button = BdApi.findModuleByProps("DropdownSizes"),
-    {ButtonLooks, ButtonColors, ButtonSizes} = BdApi.findModuleByProps("ButtonLooks")
+    {ButtonLooks, ButtonColors, ButtonSizes} = BdApi.findModuleByProps("ButtonLooks"),
+    SwitchItem = BdApi.findModuleByDisplayName("SwitchItem")
+class SwitchComponent extends Component {
+    constructor(props) {
+        super(props)
+        this.state = { toggled: loadData("BackupCustomCSS", "Keybind") ?? true }
+    }
+    render() {
+        return createElement(SwitchItem, {
+            value: this.state.toggled,
+            children: "Click keybinds",
+            note: "Clicking save and holding shift/crtl/alt will do more",
+            onChange: (value) => {
+                this.setState({ toggled: value })
+                saveData("BackupCustomCSS", "Keybind", value)
+                if (document.getElementById("BackupCustomCSS")) 
+                    document.getElementById("BackupCustomCSS").remove()
+            }
+        })
+    } 
+}
 module.exports = class BackupCustomCSS{
     getName() {return "Backup custom CSS"}
     getVersion() {return "1.1.6"}
@@ -82,12 +102,12 @@ module.exports = class BackupCustomCSS{
                         }, "Open backup folder"),
                         createElement("div", {style: {width: "7rem"}}),
                         createElement(Button, {
-                            style: {width: "fit-content"},
                             onClick: () => this.backup()
                         }, "Backup Custom CSS")
                     ]
                 }),
-                createElement("div", {style: {height: "50px"}}),
+                createElement("div", {style: {height: "30px"}}),
+                createElement(SwitchComponent),
                 createElement(Button, {
                     color: ButtonColors.RED,
                     look: ButtonLooks.OUTLINED,
@@ -106,12 +126,15 @@ module.exports = class BackupCustomCSS{
             ele.onclick = (e) => {
                 document.getElementById("BackupCustomCSS").style = "pointer-events: none !important;"
                 setTimeout(() => document.getElementById("BackupCustomCSS").style = "pointer-events: unset !important;", 50)
-                if (e.shiftKey === true) showConfirmationModal(`${this.getName()} settings`, get("BackupCustomCSS").instance.getSettingsPanel(), {
-                    confirmText: "Done",
-                    cancelText: null
-                })
-                else if (e.ctrlKey === true || e.metaKey === true) openPath(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
-                else if (e.altKey === true) this.removeAll()
+                if (loadData("BackupCustomCSS", "Keybind") === true) {
+                    if (e.shiftKey === true) showConfirmationModal(`${this.getName()} settings`, get("BackupCustomCSS").instance.getSettingsPanel(), {
+                        confirmText: "Done",
+                        cancelText: null
+                    })
+                    else if (e.ctrlKey === true || e.metaKey === true) openPath(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
+                    else if (e.altKey === true) this.removeAll()
+                    else this.backup()
+                }
                 else this.backup()
             }
             document.querySelector("#bd-editor-controls>.controls-section.controls-left").appendChild(ele)
