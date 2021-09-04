@@ -1,4 +1,4 @@
-## What is BackUpCustomCSS
+## What is BackupCustomCSS
 BackUpCustomCSS allows you to backup your custom css
 
 ## Can I use this on Powercord
@@ -9,7 +9,29 @@ In a folder named `BackUpCustomCSS` in your plugins folder
 
 ## How is the naming done
 The file gets named `BackUpCustomCSS-(<Shorthand Day)> <Shorthand Month> <Date #>-<Year #>-<Hour #>-<Minute #>-<Second #>-<Milliseconds #>).css` 
-* Example: `BackUpCustomCSS-(Tue Aug 31-2021-18-10-0-372).css`
+* Example: `BackupCustomCSS-(Fri Sep 03-2021-16-54-28-115).css`
+
+## How is the file content's done
+```css
+/*
+    Backup data
+    time: <Shorthand Day)> <Shorthand Month> <Date #> <Year #> <Hour #> <Minute #> <Second #> <Milliseconds #> <gmt / Greenwich Mean Time> <Time zone>
+    UnixTimestamp: <UnixTimestamp>
+*/
+<Your custom CSS>
+```
+ex: 
+```css
+/*
+    Backup data
+    time: Fri Sep 03 2021 16:54:28 GMT-0700 (Pacific Daylight Time)
+    UnixTimestamp: 1630713268115
+*/
+
+.app-2rEoOp {
+    transform: unset !important;
+}
+```
 
 ## Keybinds and Clicking
 * Clicking the backup icon will backup the css
