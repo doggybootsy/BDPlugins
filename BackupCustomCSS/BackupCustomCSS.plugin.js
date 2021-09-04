@@ -7,14 +7,18 @@
  */
 
 let {env: {DISCORD_RELEASE_CHANNEL}} = process,
-    {showToast, React: {createElement, Component}, showConfirmationModal, alert, saveData, loadData, Plugins: {get, folder}} = BdApi,
+    {showToast, React: {createElement, Component}, showConfirmationModal, alert, saveData, loadData, Plugins: {folder}} = BdApi,
     {error} = console,
     {existsSync,mkdirSync,writeFile,rmdir,readFile} = require("fs"),
     {shell: {openPath}} = require("electron"),
     {join} = require("path"),
     Button = BdApi.findModuleByProps("DropdownSizes"),
     {ButtonLooks, ButtonColors, ButtonSizes} = BdApi.findModuleByProps("ButtonLooks"),
-    SwitchItem = BdApi.findModuleByDisplayName("SwitchItem")
+    Buttons = BdApi.findModuleByProps("ButtonLooks"),
+    SwitchItem = BdApi.findModuleByDisplayName("SwitchItem"),
+    {ModalRoot, ModalSize: {MEDIUM}, ModalContent, ModalFooter, ModalHeader} = BdApi.findModuleByProps("ModalRoot"),
+    FormTitle = BdApi.findModuleByDisplayName("FormTitle"),
+    {openModal} = BdApi.findModuleByProps("openModal")
 class SwitchComponent extends Component {
     constructor(props) {
         super(props)
@@ -36,12 +40,29 @@ class SwitchComponent extends Component {
 }
 module.exports = class BackupCustomCSS{
     getName() {return "Backup custom CSS"}
-    getVersion() {return "1.1.7"}
+    getVersion() {return "1.2.0"}
     checkIf() {
         if (!existsSync(join(folder, "BackupCustomCSS"))) 
             mkdirSync(join(folder, "BackupCustomCSS"))
         if (!existsSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))) 
             mkdirSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
+    }
+    showSettingsModal() {
+        openModal(props => {
+            return createElement(props => {
+                return createElement(ModalRoot, Object.assign({size: MEDIUM, className: "bd-addon-modal"}, props),
+                createElement(ModalHeader, {separator: false, className: "bd-addon-modal-header"},
+                        createElement(FormTitle, {tag: "h4"}, `${this.getName()} Settings`)
+                    ),
+                    createElement(ModalContent, {className: "bd-addon-modal-settings"}, 
+                        createElement('div', {}, BdApi.Plugins.get('BackupCustomCSS').instance.getSettingsPanel())
+                    ),
+                    createElement(ModalFooter, {className: "bd-addon-modal-footer"},
+                        createElement(Buttons.default, {onClick: props.onClose, className: "bd-button"}, "Done")
+                    )
+                )
+            }, props)
+        })
     }
     _error(txt,err) {
         alert(this.getName(), [txt, `\`\`\`js\n${err}\n\`\`\``, "If this keeps happening make an issue on the github"])
@@ -100,7 +121,7 @@ module.exports = class BackupCustomCSS{
                                 openPath(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
                             }
                         }, "Open backup folder"),
-                        createElement("div", {style: {width: "7rem"}}),
+                        createElement("div", {style: {width: "17rem"}}),
                         createElement(Button, {
                             onClick: () => this.backup()
                         }, "Backup Custom CSS")
@@ -127,10 +148,7 @@ module.exports = class BackupCustomCSS{
                 document.getElementById("BackupCustomCSS").style = "pointer-events: none !important;"
                 setTimeout(() => document.getElementById("BackupCustomCSS").style = "pointer-events: unset !important;", 50)
                 if (loadData("BackupCustomCSS", "Keybind") === true) {
-                    if (e.shiftKey === true) showConfirmationModal(`${this.getName()} settings`, get("BackupCustomCSS").instance.getSettingsPanel(), {
-                        confirmText: "Done",
-                        cancelText: null
-                    })
+                    if (e.shiftKey === true) this.showSettingsModal()
                     else if (e.ctrlKey === true || e.metaKey === true) openPath(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
                     else if (e.altKey === true) this.removeAll()
                     else this.backup()
