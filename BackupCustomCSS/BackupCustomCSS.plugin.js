@@ -36,7 +36,7 @@ class SwitchComponent extends Component {
 }
 module.exports = class BackupCustomCSS{
     getName() {return "Backup custom CSS"}
-    getVersion() {return "1.1.6"}
+    getVersion() {return "1.1.7"}
     checkIf() {
         if (!existsSync(join(folder, "BackupCustomCSS"))) 
             mkdirSync(join(folder, "BackupCustomCSS"))
