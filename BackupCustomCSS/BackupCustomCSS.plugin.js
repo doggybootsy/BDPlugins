@@ -21,7 +21,7 @@ let {env: {DISCORD_RELEASE_CHANNEL}, platform} = process,
     {DONE} = BdApi.findModuleByProps("Messages").Messages
 module.exports = class BackupCustomCSS{
     getName() {return "Backup custom CSS"}
-    getVersion() {return "1.2.1"}
+    getVersion() {return "1.2.2"}
     checkIf() {
         if(!existsSync(join(folder, "BackupCustomCSS"))) mkdirSync(join(folder, "BackupCustomCSS"))
         if(!existsSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))) mkdirSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
@@ -39,7 +39,7 @@ module.exports = class BackupCustomCSS{
                         createElement('div', {}, this.getSettingsPanel())
                     ),
                     createElement(ModalFooter, {className: "bd-addon-modal-footer"},
-                        createElement(Buttons.default, {className: "bd-button"}, DONE)
+                        createElement(Buttons.default, {onClick: props.onClose, className: "bd-button"}, DONE)
                     )
                 )
             }
