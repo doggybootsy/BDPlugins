@@ -38,3 +38,4 @@ ex:
 * Holding `Shift` and clicking the backup icon will open the settings modal
 * Holding `Crtl` and clicking the backup icon will open the file location
 * Holding `Alt` and clicking the backup icon will open the delete all backups modal
+* Can I disable these? Yes, in settings under `Click keybinds` switch
