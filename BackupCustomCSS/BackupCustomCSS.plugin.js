@@ -7,7 +7,7 @@
  */
 
 let {env: {DISCORD_RELEASE_CHANNEL}, platform} = process,
-    {showToast, React: {createElement, Component}, showConfirmationModal, alert, saveData, loadData, Plugins: {folder}} = BdApi,
+    {showToast, React: {createElement, Component}, showConfirmationModal, alert, saveData, loadData, Plugins} = BdApi,
     {existsSync,mkdirSync,writeFile,rmdir,readFile} = require("fs"),
     {shell: {openPath}} = require("electron"),
     {join} = require("path"),
@@ -18,40 +18,134 @@ let {env: {DISCORD_RELEASE_CHANNEL}, platform} = process,
     {ModalRoot, ModalSize: {MEDIUM}, ModalContent, ModalFooter, ModalHeader} = BdApi.findModuleByProps("ModalRoot"),
     FormTitle = BdApi.findModuleByDisplayName("FormTitle"),
     {openModal} = BdApi.findModuleByProps("openModal"),
-    {DONE} = BdApi.findModuleByProps("Messages").Messages
+    {DONE} = BdApi.findModuleByProps("Messages").Messages,
+    TextInput = BdApi.findModule(m=>m?.defaultProps?.type==="text"),
+    {title} = BdApi.findModuleByProps("container", "labelRow", "title"),
+    folder = loadData("BackupCustomCSS", "saveLocation") ?? Plugins.folder
+class SwitchComponent extends Component {
+    constructor(props) {
+        super(props)
+        this.state = { toggled: props.value }
+    }
+    render() {
+        return createElement(SwitchItem, {
+            value: this.state.toggled,
+            children: this.props.children,
+            note: this.props.note,
+            onChange: (value) => {
+                if(this.props.onClick) this.props.onClick()
+                this.setState({ toggled: value })
+                saveData("BackupCustomCSS", this.props.id, value)
+                if(document.getElementById("BackupCustomCSS")) document.getElementById("BackupCustomCSS").remove()
+            }
+        })
+    } 
+}
+class SettingsPanel extends Component {
+    constructor() {
+        super(...arguments)
+        this.state = {Path: folder}
+    }
+    render() {
+        return createElement("div", {
+			id: "BackupCustomCSS-Settings",
+            children: [
+                createElement("div", {
+                    style: {display: "flex"},
+                    children: [
+                        createElement(Button, {
+                            onClick: () => {
+                                this.props.instance.checkIf()
+                                openPath(join(this.state.Path, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
+                            }
+                        }, "Open backup folder"),
+                        createElement("div", {style: {width: "17rem"}}),
+                        createElement(Button, {
+                            onClick: () => this.props.instance.backup()
+                        }, "Backup Custom CSS")
+                    ]
+                }),
+                createElement("div", {style: {height: "30px"}}),
+                createElement(SwitchComponent, {
+					id: "Keybind",
+					value: loadData("BackupCustomCSS", "Keybind") ?? true, 
+					children: "Click keybinds",
+					note: `Clicking backup and holding either ${platform === "darwin" ? "⇧/⌘/⌥ (shift/command/option)" : "shift/crtl/alt"} will do more`,
+				}),
+                createElement(SwitchComponent, {
+					id: "QuickDelete",
+					value: loadData("BackupCustomCSS", "QuickDelete") ?? true, 
+					children: "Quickly delete backup's keybind",
+					note: "Quickly open the delete backup's promp"
+				}),
+                createElement("div", {
+                    style: {marginBottom: "30px"},
+                    children: [
+                        createElement("div", {
+                            className: title
+                        }, "Custom backup location"),
+                        createElement("div", {
+                            style: {display: "flex"},
+                            children: [
+                                createElement(TextInput, {
+                                    value: this.state.Path,
+                                    style: {width: "460px",marginRight: "10px"},
+                                    onChange: e => {
+                                        this.setState({Path: e})
+                                        saveData("BackupCustomCSS", "saveLocation", e)
+                                    },
+                                }),
+                                createElement(Buttons.default, {
+                                    className: "bd-button",
+                                    onClick: () => {
+                                        this.setState({Path: Plugins.folder})
+                                        saveData("BackupCustomCSS", "saveLocation", Plugins.folder)
+                                    },
+                                }, "Reset")
+                            ]
+                        })
+                    ]
+                }),
+                createElement("div", {
+                    style: {display: "flex"},
+					children: [
+                        createElement("div", {style: {width: "28rem"}}),
+                        createElement(Button, {
+							color: ButtonColors.RED,
+							look: ButtonLooks.OUTLINED,
+							size: ButtonSizes.SMALL,
+							onClick: () => this.props.instance.removeAll()
+						}, "Delete backup's")
+					]
+				})
+            ]
+        })
+    }
+}
 module.exports = class BackupCustomCSS{
     getName() {return "Backup custom CSS"}
-    getVersion() {return "1.2.2"}
+    getVersion() {return "1.2.3"}
     checkIf() {
         if(!existsSync(join(folder, "BackupCustomCSS"))) mkdirSync(join(folder, "BackupCustomCSS"))
         if(!existsSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))) mkdirSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
     }
-    getSettingsPanel() {
-        return createElement(SettingsPanel, {instance: this})
-    }
+    getSettingsPanel() {return createElement(SettingsPanel, {instance: this})}
     showSettingsModal() {
         openModal(props => {
             return createElement(ModalRoot, Object.assign({size: MEDIUM, className: "bd-addon-modal"}, props),
-                createElement(ModalHeader, {separator: false, className: "bd-addon-modal-header"},
-                        createElement(FormTitle, {tag: "h4"}, `${this.getName()} Settings`)
-                    ),
-                    createElement(ModalContent, {className: "bd-addon-modal-settings"}, 
-                        createElement('div', {}, this.getSettingsPanel())
-                    ),
-                    createElement(ModalFooter, {className: "bd-addon-modal-footer"},
-                        createElement(Buttons.default, {onClick: props.onClose, className: "bd-button"}, DONE)
-                    )
-                )
-            }
+                createElement(ModalHeader, {separator: false, className: "bd-addon-modal-header"},createElement(FormTitle, {tag: "h4"}, `${this.getName()} Settings`)),
+                createElement(ModalContent, {className: "bd-addon-modal-settings"}, this.getSettingsPanel()),
+                createElement(ModalFooter, {className: "bd-addon-modal-footer"},createElement(Buttons.default, {onClick: props.onClose, className: "bd-button"}, DONE))
+            )}
         )
     }
     _error(txt,err) {
-        alert(this.getName(), [txt, `\`\`\`js\n${err}\n\`\`\``, "ifthis keeps happening make an issue on the github"])
+        alert(this.getName(), [txt, `\`\`\`js\n${err}\n\`\`\``, "If this keeps happening make an issue on the github"])
         console.error(err)
     }
     backup() {
         this.checkIf()
-        readFile(join(folder, "..", "data", DISCORD_RELEASE_CHANNEL, "custom.css"), "utf8", (err, data) => {
+        readFile(join(Plugins.folder, "..", "data", DISCORD_RELEASE_CHANNEL, "custom.css"), "utf8", (err, data) => {
             if(err) this.error("Couldnt read custom css", err)
             else {
                 const date = new Date(), time = `${date}`.split(" ")
@@ -103,83 +197,5 @@ module.exports = class BackupCustomCSS{
             }
             document.querySelector("#bd-editor-controls>.controls-section.controls-left").appendChild(ele)
         }
-    }
-}
-class SwitchComponent extends Component {
-    constructor(props) {
-        super(props)
-        this.state = { toggled: props.value }
-    }
-    render() {
-        return createElement(SwitchItem, {
-            value: this.state.toggled,
-            children: this.props.children,
-            note: this.props.note,
-            onChange: (value) => {
-                if(this.props.onClick) this.props.onClick()
-                this.setState({ toggled: value })
-                saveData("BackupCustomCSS", this.props.id, value)
-                if(document.getElementById("BackupCustomCSS")) document.getElementById("BackupCustomCSS").remove()
-            }
-        })
-    } 
-}
-class SettingsPanel extends Component {
-    constructor() {
-        super(...arguments)
-        this.state = { buttonDisabled: loadData("BackupCustomCSS", "QuickDelete") ?? true }
-    }
-    render() {
-        return createElement("div", {
-			id: "BackupCustomCSS-Settings",
-            children: [
-                createElement("div", {
-                    style: {display: "flex"},
-                    children: [
-                        createElement(Button, {
-                            onClick: () => {
-                                this.props.instance.checkIf()
-                                openPath(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
-                            }
-                        }, "Open backup folder"),
-                        createElement("div", {style: {width: "17rem"}}),
-                        createElement(Button, {
-                            onClick: () => this.props.instance.backup()
-                        }, "Backup Custom CSS")
-                    ]
-                }),
-                createElement("div", {style: {height: "30px"}}),
-                createElement(SwitchComponent, {
-					id: "Keybind",
-					value: loadData("BackupCustomCSS", "Keybind") ?? true, 
-					children: "Click keybinds",
-					note: `Clicking backup and holding either ${platform === "darwin" ? "⇧/⌘/⌥ (shift/command/option)" : "shift/crtl/alt"} will do more`,
-				}),
-                createElement(SwitchComponent, {
-					id: "QuickDelete",
-					value: this.state.buttonDisabled, 
-					children: "Quickly delete backup's",
-					note: "Quickly open the delete backup's promp",
-                    onClick: () => {
-                        this.setState({ buttonDisabled: this.state.buttonDisabled })
-                        const ele = document.querySelector("#BackupCustomCSS-Settings>:last-child>:last-child")
-                        ele.disabled = !ele.disabled
-                    }
-				}),
-                createElement("div", {
-                    style: {display: "flex"},
-					children: [
-                        createElement("div", {style: {width: "28rem"}}),
-						createElement(Button, {
-							color: ButtonColors.RED,
-							look: ButtonLooks.OUTLINED,
-							size: ButtonSizes.SMALL,
-							disabled: !this.state.buttonDisabled,
-							onClick: () => this.props.instance.removeAll()
-						}, "Delete backup's")
-					]
-				})
-            ]
-        })
     }
 }
