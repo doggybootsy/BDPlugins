@@ -1,6 +1,7 @@
 /**
  * @name BackupCustomCSS
  * @description Back up custom css in a seperate file. Hold shift and tap the save icon to open settings
+ * @version 1.2.4
  * @author doggybootsy
  * @source https://github.com/doggybootsy/BDPlugins/
  * @website https://doggybootsy.github.io/
@@ -20,8 +21,8 @@ let {env: {DISCORD_RELEASE_CHANNEL}, platform} = process,
     {openModal} = BdApi.findModuleByProps("openModal"),
     {DONE} = BdApi.findModuleByProps("Messages").Messages,
     TextInput = BdApi.findModule(m=>m?.defaultProps?.type==="text"),
-    {title} = BdApi.findModuleByProps("container", "labelRow", "title"),
-    folder = loadData("BackupCustomCSS", "saveLocation") ?? Plugins.folder
+    folder = loadData("BackupCustomCSS", "saveLocation") ?? Plugins.folder,
+    {FormItem, FormText} = BdApi.findModuleByProps("FormItem", "FormText")
 class SwitchComponent extends Component {
     constructor(props) {
         super(props)
@@ -33,7 +34,6 @@ class SwitchComponent extends Component {
             children: this.props.children,
             note: this.props.note,
             onChange: (value) => {
-                if(this.props.onClick) this.props.onClick()
                 this.setState({ toggled: value })
                 saveData("BackupCustomCSS", this.props.id, value)
                 if(document.getElementById("BackupCustomCSS")) document.getElementById("BackupCustomCSS").remove()
@@ -82,21 +82,31 @@ class SettingsPanel extends Component {
                     style: {marginBottom: "30px"},
                     children: [
                         createElement("div", {
-                            className: title
-                        }, "Custom backup location"),
-                        createElement("div", {
                             style: {display: "flex"},
                             children: [
-                                createElement(TextInput, {
-                                    value: this.state.Path,
-                                    style: {width: "460px",marginRight: "10px"},
-                                    onChange: e => {
-                                        this.setState({Path: e})
-                                        saveData("BackupCustomCSS", "saveLocation", e)
-                                    },
+                                // Code mostly stolen from stern
+                                createElement(FormItem, {
+                                    title: "Custom backup location",
+                                    style: {width: "100%",marginRight: "10px"},
+                                    children: [
+                                        createElement(TextInput, {
+                                            placeholder: platform === "darwin" ? "/Users/" : "C:\\Users\\",
+                                            value: this.state.Path,
+                                            onChange: e => {
+                                                this.setState({Path: e})
+                                                saveData("BackupCustomCSS", "saveLocation", e)
+                                            }
+                                        }),
+                                        createElement(FormText, {
+                                            children: "Enter full path or it may not work as intended to",
+                                            type: "description"
+                                        })
+                                    ]
+                                    // End
                                 }),
                                 createElement(Buttons.default, {
                                     className: "bd-button",
+                                    style: {marginTop: "24px"},
                                     onClick: () => {
                                         this.setState({Path: Plugins.folder})
                                         saveData("BackupCustomCSS", "saveLocation", Plugins.folder)
@@ -124,10 +134,13 @@ class SettingsPanel extends Component {
 }
 module.exports = class BackupCustomCSS{
     getName() {return "Backup custom CSS"}
-    getVersion() {return "1.2.3"}
     checkIf() {
-        if(!existsSync(join(folder, "BackupCustomCSS"))) mkdirSync(join(folder, "BackupCustomCSS"))
-        if(!existsSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))) mkdirSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
+        try {
+            if(!existsSync(join(folder, "BackupCustomCSS"))) mkdirSync(join(folder, "BackupCustomCSS"))
+            if(!existsSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))) mkdirSync(join(folder, "BackupCustomCSS", DISCORD_RELEASE_CHANNEL))
+        } catch (e) {
+            saveData("BackupCustomCSS", "saveLocation", Plugins.folder)
+        }
     }
     getSettingsPanel() {return createElement(SettingsPanel, {instance: this})}
     showSettingsModal() {
@@ -174,7 +187,7 @@ module.exports = class BackupCustomCSS{
     }
     start() {
         if(window.powercord != null) alert(this.getName(), "This plugin doesnt support powercord.")
-        if(global.ZeresPluginLibrary) global.ZeresPluginLibrary.PluginUpdater.checkForUpdate(this.getName(), this.getVersion(), "https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackupCustomCSS/BackupCustomCSS.plugin.js")
+        if(global.ZeresPluginLibrary) global.ZeresPluginLibrary.PluginUpdater.checkForUpdate(this.getName(), Plugins.get("BackupCustomCSS").version, "https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/BackupCustomCSS/BackupCustomCSS.plugin.js")
         this.checkIf()
     }
     stop() {
