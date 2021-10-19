@@ -13,7 +13,7 @@ const url = require("url")
 const fs = require("fs")
 const path = require("path")
 
-const Text = BdApi.findModuleByDisplayName("Text")
+const Markdown = BdApi.findModuleByDisplayName("Markdown")
 const Anchor = BdApi.findModuleByDisplayName("Anchor")
 const FormTitle = BdApi.findModuleByDisplayName("FormTitle")
 const { React } = BdApi
@@ -33,14 +33,25 @@ module.exports = class LocalServer {
   })
   getSettingsPanel() {
     const goodUrl = `http://localhost:8080${__dirname.replace(process.env.HOME, "")}/${__filename}`
-    const badUrl = `http://localhost:8080${__dirname.replace(process.env.HOME, "")}`
+    const badUrl = `http://localhost:8080${__dirname}/${__filename}`
     return React.createElement(React.Fragment, {
       children: [
         React.createElement(FormTitle, {tag: "h4", style: {marginTop: "10px"}}, "Url demos"),
-        React.createElement(Text, {style: {marginTop: "10px"}}, "Good Url demo, 200"),
-        React.createElement(Anchor, {href: goodUrl}, goodUrl),
-        React.createElement(Text, {style: {marginTop: "10px"}}, "Bad Url demo, 404"),
-        React.createElement(Anchor, {href: badUrl}, badUrl),
+        React.createElement("div", {
+          style: {margin: "10px 0 10px 0"},
+          children: [
+            React.createElement(Markdown, null, "Good Url demo, 200"),
+            React.createElement(Anchor, {href: goodUrl}, goodUrl),
+          ]
+        }),
+        React.createElement("div", {
+          style: {margin: "10px 0 10px 0"},
+          children: [
+            React.createElement(Markdown, null, "Bad Url demo, 404"),
+            React.createElement(Anchor, {href: badUrl}, badUrl),
+          ]
+        }),
+        React.createElement(Markdown, null, `The path starts at user so for you it starts at \`${process.env.HOME}\``),
       ]
     })
   }
