@@ -163,7 +163,7 @@ class SettingsPanel extends React.Component {
               look: ButtonLooks.OUTLINED,
               size: ButtonSizes.SMALL,
               onClick: () => this.props.instance.removeAll()
-            }, "Delete backup's")
+            }, "Delete All Backup's")
           ]
         })
       ]
@@ -233,7 +233,7 @@ module.exports = class BackupCustomCSS{
   }
   stop() {if(document.getElementById("BackupCustomCSS")) document.getElementById("BackupCustomCSS").remove()}
   observer() {
-    if(document.getElementById("bd-editor-controls") && !document.getElementById("BackupCustomCSS")) {
+    if(!document.getElementById("BackupCustomCSS") && (document.getElementById("bd-floating-editor") || document.getElementById("bd-customcss-editor"))) {
       const ele = document.createElement("button")
       ele.id = "BackupCustomCSS"
       ele.classList = "btn btn-primary"
@@ -246,8 +246,6 @@ module.exports = class BackupCustomCSS{
         else this.backup()
       }
       document.querySelector("#bd-editor-controls>.controls-section.controls-left").appendChild(ele)
-      if(window.ZLibrary != null)
-        new window.ZLibrary.EmulatedTooltip(ele, this.getName(), {disablePointerEvents: true})
     }
   }
 }
