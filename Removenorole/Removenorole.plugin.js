@@ -2,7 +2,7 @@
  * @name RemoveNoRole
  * @author Doggybootsy
  * @description Remove the "NO ROLES" from user popouts
- * @version 1.4
+ * @version 1.5
  * @source https://github.com/doggybootsy/BDPlugins/
  * @website https://doggybootsy.github.io/
  */
@@ -13,13 +13,13 @@
     }
 
     observer (mutations) {
-        if (document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty')) {
-            document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty').previousSibling.style.display = "none";
-            document.querySelector('.userPopout-xaxa6l .root-3-B5F3:empty').style.display = "none";
+        if (document.querySelector('.userPopout-2j1gM4 .root-jbEB5E:empty')) {
+            document.querySelector('.userPopout-2j1gM4 .root-jbEB5E:empty').previousSibling.style.display = "none";
+            document.querySelector('.userPopout-2j1gM4 .root-jbEB5E:empty').style.display = "none";
         };
-        if (document.querySelector('.userPopout-xaxa6l .root-3-B5F3[style]:not(:empty)')) {
-            document.querySelector('.userPopout-xaxa6l .root-3-B5F3[style]:not(:empty)').previousSibling.removeAttribute('style')
-            document.querySelector('.userPopout-xaxa6l .root-3-B5F3[style]:not(:empty)').removeAttribute('style')
+        if (document.querySelector('.userPopout-2j1gM4 .root-jbEB5E[style]:not(:empty)')) {
+            document.querySelector('.userPopout-2j1gM4 .root-jbEB5E[style]:not(:empty)').previousSibling.removeAttribute('style')
+            document.querySelector('.userPopout-2j1gM4 .root-jbEB5E[style]:not(:empty)').removeAttribute('style')
         };
     };
 
