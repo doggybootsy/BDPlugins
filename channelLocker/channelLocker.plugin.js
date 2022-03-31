@@ -40,10 +40,11 @@ module.exports = class channelLocker {
   updateIcons() {
     // Confusing but working way to rerender the buttons
     const orig = this.isLocked(channelId)
-    this.setLocked(channelId, !orig)
+    if (!orig) return
+    this.setLocked(channelId, false)
     forceUpdate()
     setImmediate(() => {
-      this.setLocked(channelId, orig)
+      this.setLocked(channelId, true)
       forceUpdate()
     })
   }
@@ -77,10 +78,6 @@ module.exports = class channelLocker {
     let _this = this
     if (this.cta) return this.cta
     return this.cta = class extends React.Component {
-      constructor(props) {
-        super(props)
-        this.state = {}
-      }
       componentDidMount() { forceUpdate = this.forceUpdate.bind(this) }
       render() {
         if (_this.isLocked(channelId)) return _this.blockedChat()
@@ -92,9 +89,11 @@ module.exports = class channelLocker {
   start() {
     const CTA = this.generateCTA()
     BdApi.Patcher.after(this.constructor.name, ChannelTextAreaButtons, "type", (_, [props], res) => {
+      if (!res) return
       const { children } = res.props
       let num = (getData("location")) ? 0 : children.length - children.filter(e => e.key === "submit").length
-      if (props.type.analyticsName === "normal") children.splice(num, 0, React.createElement(ChannelTextAreaButton, {
+      if (props.type.analyticsName !== "normal") return
+      children.splice(num, 0, React.createElement(ChannelTextAreaButton, {
         onClick: () => forceUpdate(this.setLocked(props.channel.id, true)),
         innerClassName: button,
         children: React.createElement(LockClosed)
@@ -102,9 +101,9 @@ module.exports = class channelLocker {
     })
     BdApi.Patcher.instead(this.constructor.name, ChannelTextAreaContainer.type, "render", (_, [props], orig) => {
       const res = orig(props)
+      if (props.type.analyticsName !== "normal") return res
       channelId = props.channel.id
-      if (props.type.analyticsName === "normal") return React.createElement(CTA, { res })
-      return res
+      return React.createElement(CTA, { res })
     })
   }
   stop() { BdApi.Patcher.unpatchAll(this.constructor.name) }
