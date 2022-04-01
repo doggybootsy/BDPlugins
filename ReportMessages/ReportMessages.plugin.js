@@ -5,6 +5,8 @@
  * @author doggybootsy
  */
 
+// Modules
+const { Messages } = BdApi.findAllModules(e => e.Messages)[1]
 const MiniPopover = BdApi.findModule(m => m.default.displayName === "MiniPopover")
 const Flag = BdApi.findModuleByDisplayName("Flag")
 const {
@@ -12,15 +14,14 @@ const {
 } = BdApi.findModuleByProps("showReportModalForMessage", "showReportModalForGuild")
 const Alert = BdApi.findModuleByDisplayName("Alert")
 const { openModal } = BdApi.findModuleByProps("openModalLazy", "openModal")
-const getData = BdApi.getData.bind(this, "ReportMessages")
-const setData = BdApi.saveData.bind(this, "ReportMessages")
-const showedPrompt = getData("showedPrompt")
 const Switch = BdApi.findModuleByDisplayName("SwitchItem")
 const Tooltip = BdApi.findModuleByDisplayName("Tooltip")
 const Markdown = BdApi.findModule((m) => m?.displayName === "Markdown" && m.rules)
 const { React } = BdApi
-// Little i18n ig
-const { Messages } = BdApi.findAllModules(e => e.Messages)[1]
+// Data
+const getData = BdApi.getData.bind(this, "ReportMessages")
+const setData = BdApi.saveData.bind(this, "ReportMessages")
+const showedPrompt = getData("showedPrompt")
 
 module.exports = class ReportMessages {
   getName() { return Messages.REPORT_MESSAGE_MENU_OPTION }
