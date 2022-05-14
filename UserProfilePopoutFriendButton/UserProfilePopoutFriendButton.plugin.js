@@ -1,8 +1,9 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.0.0
+ * @version 1.0.1
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
+ * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
  */
 
 const UserPopout = BdApi.findModuleByProps("UserPopoutInfo")
@@ -104,6 +105,49 @@ function RequestButton({ user }) {
   })
 }
 
+async function updator() {
+  const result = await fetch("https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js")
+  const content = await result.text()
+  const meta = BdApi.Plugins.get("UserProfilePopoutFriendButton")
+  
+  const block = content.split("/**", 2)[1].split("*/", 1)[0]
+  const out = {}
+  let field = "", accum = ""
+  for (const line of block.split(/[^\S\r\n]*?(?:\r\n|\n)[^\S\r\n]*?\*[^\S\r\n]?/)) {
+    if (line.length === 0) continue
+    if (line.charAt(0) === "@" && line.charAt(1) !== " ") {
+      out[field] = accum
+      const l = line.indexOf(" ")
+      field = line.substr(1, l - 1)
+      accum = line.substr(l + 1)
+    } 
+    else accum += " " + line.replace("\\n", "\n").replace(/^\\@/, "@")
+  }
+  out[field] = accum.trim()
+  delete out[""]
+  out.format = "jsdoc"
+  
+  const onlineVersion = Number(out.version.replaceAll(".", ""))
+  const localVersion = Number(meta.version.replaceAll(".", ""))
+
+  if (!(onlineVersion > localVersion)) return
+
+  const { openModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
+  const Alert = BdApi.findModuleByDisplayName("Alert")
+
+  openModal(props => React.createElement(Alert, {
+    ...props,
+    title: "UserProfilePopoutFriendButton",
+    body: "Plugin is out of date!",
+    cancelText: "Skip",
+    confirmText: "Update",
+    onConfirm: () => {
+      require("fs").writeFileSync(require("path").join(__dirname, "UserProfilePopoutFriendButton.plugin.js"), content)
+      location.reload()
+    }
+  }))
+}
+
 module.exports = class UserProfilePopoutFriendButton {
   start() {
     BdApi.injectCSS(this.constructor.name, `.UserProfilePopoutFriendRequest:not(:empty) { display: flex; align-items: center; margin-top: 8px }
@@ -118,6 +162,7 @@ module.exports = class UserProfilePopoutFriendButton {
         result.props.children.push(React.createElement(RequestButton, { user }))
       }
     )
+    updator()
   }
   stop() {
     BdApi.clearCSS(this.constructor.name)
