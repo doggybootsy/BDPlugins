@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.0.3
+ * @version 1.0.4
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -114,7 +114,7 @@ function RequestButton({ user }) {
 
 async function updater() {
   // every 2 hrs run the updater
-  setTimeout(() => updater(), 1000 * 60 * 60)
+  setTimeout(() => updater(), 1000 * 60 * 60 * 2)
   // Fetch file
   const result = await fetch("https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js")
   const content = await result.text()
@@ -167,14 +167,9 @@ module.exports = class UserProfilePopoutFriendButton {
 .UserProfilePopoutFriendRequest > .pendingIncoming-3g05VP > button { width: 100% }
 .UserProfilePopoutFriendRequest > :first-child:last-child { margin-left: auto }`)
     // The patch
-    BdApi.Patcher.after(
-      this.constructor.name, 
-      UserPopout, 
-      "UserPopoutInfo", 
-      (_, [{ user }], result) => {
-        result.props.children.push(React.createElement(RequestButton, { user }))
-      }
-    )
+    BdApi.Patcher.after(this.constructor.name, UserPopout, "UserPopoutInfo", (_, [{ user }], result) => {
+      result.props.children.push(React.createElement(RequestButton, { user }))
+    })
     // Run the updater
     updater()
   }
