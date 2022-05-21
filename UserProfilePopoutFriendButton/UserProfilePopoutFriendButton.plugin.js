@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.0.4
+ * @version 1.0.5
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -23,8 +23,31 @@ const { getRelationshipType } = BdApi.findModuleByProps("getRelationships")
 const dispatch = BdApi.findModuleByProps("dispatch", "dirtyDispatch")
 const { RelationshipTypes } = BdApi.findModuleByProps("RelationshipTypes")
 const { openContextMenu } = BdApi.findModuleByProps("openContextMenuLazy")
+// Catcher Errors
+function reactCatcher(elementType, elementProps) {
+  class reactCatcher extends React.PureComponent {
+    constructor(props) {
+      super(props)
+      this.state = { crashed: false }
+    }
+    static displayName = "UPPFB-Error-Boundary"
+    componentDidCatch() { this.setState({ crashed: true }) }
+    render() {
+      return this.state.crashed ? React.createElement("div", {
+        className: "UPPFB-React-Error"
+      }, "React Error") : React.createElement(elementType, elementProps) 
+    }
+  }
+  return React.createElement(reactCatcher)
+}
+// Make a function component and make it fancy
+function makeFunctionalComponent(type, displayName) {
+  displayName = `UPPFB-${displayName}`
+  type.displayName = displayName + "-Child"
+  return Object.assign((props) => reactCatcher(type, props), { displayName: displayName + "-Wrapper" })
+}
 // A simple wrapper for the relation status
-function RelationStatusWrapper({ user, children }) {
+const RelationStatusWrapper = makeFunctionalComponent(({ user, children }) => {
   const [relationshipType, setRelationshipType] = React.useState(getRelationshipType(user.id))
   // Subscribe to relationship add/remove
   React.useEffect(() => {
@@ -39,7 +62,8 @@ function RelationStatusWrapper({ user, children }) {
     }
   })
   return children(relationshipType)
-}
+}, "Relation-Status")
+
 // Add lazy loaded modules if they dont exist
 webpackChunkdiscord_app.push([[Symbol()], {}, async (instance) => {
   // If the button or the classes arent added load it
@@ -77,7 +101,7 @@ function openMenu(event, user) {
   })
 }
 // Request Button
-function RequestButton({ user }) {
+const RequestButton = makeFunctionalComponent(function({ user }) {
   // 'UserProfileFriendRequestButton' has a 'isCurrentUser' prop to not show the button
   const isCurrentUser = getCurrentUser().id === user.id
   return React.createElement(RelationStatusWrapper, {
@@ -110,7 +134,7 @@ function RequestButton({ user }) {
       ]
     })
   })
-}
+}, "RequestButton")
 
 async function updater() {
   // every 2 hrs run the updater
@@ -165,7 +189,8 @@ module.exports = class UserProfilePopoutFriendButton {
     BdApi.injectCSS(this.constructor.name, `.UserProfilePopoutFriendRequest:not(:empty) { display: flex; align-items: center; margin-top: 8px }
 .UserProfilePopoutFriendRequest > :first-child,
 .UserProfilePopoutFriendRequest > .pendingIncoming-3g05VP > button { width: 100% }
-.UserProfilePopoutFriendRequest > :first-child:last-child { margin-left: auto }`)
+.UserProfilePopoutFriendRequest > :first-child:last-child { margin-left: auto }
+.UPPFB-React-Error { color: red; text-align: center; padding: 6px; margin-top: 10px; background: var(--background-primary); border-radius: 6px }`)
     // The patch
     BdApi.Patcher.after(this.constructor.name, UserPopout, "UserPopoutInfo", (_, [{ user }], result) => {
       result.props.children.push(React.createElement(RequestButton, { user }))
