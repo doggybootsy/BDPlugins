@@ -1,7 +1,7 @@
 /**
  * @name quickReact
  * @description Quickly react to messages. 
- * @version 1.0.2
+ * @version 1.0.3
  * @author doggybootsy
  */
 
@@ -46,13 +46,26 @@ let emoji = BdApi.getData("quickReact", "emoji") ?? [
 BdApi.setData("quickReact", "emoji", emoji)
 // Emoji
 function Emoji({ emoji, jumbo }) {
+  let emojiInfo = {}
+  allEmojis.find(e => {
+    if (e.allNamesString === emoji.emojiName) {
+      emojiInfo = e
+      return true
+    }
+    if (!e.hasDiversity) return
+    for (const child of Object.values(e.diversityChildren))
+      if (child.allNamesString === emoji.emojiName) {
+        emojiInfo = child
+        return true
+      }
+  })
   return React.createElement("div", {
     id: "quickReactEmojiWrapper",
     style: emoji.url ? null : { zoom: ".7" },
     children: React.createElement(EmojiSpriteSheet, {
         rowIndex: 1,
         size: jumbo ? 48 : 32,
-        emoji: allEmojis.find(e => e.allNamesString === emoji.emojiName),
+        emoji: emojiInfo,
         surrogateCodePoint: emoji.surrogateCodePoint,
         "aria-label": emoji.emojiName,
         useReducedMotion: false
@@ -78,7 +91,7 @@ function Picker({ setEmoji }) {
       const newEmoji = [
         {
           animated: false,
-          name: scp ? emojiInfo.diversityChildren[scp].surrogates : emojiInfo.name,
+          name: scp ? emojiInfo.diversityChildren[scp].surrogates : emojiInfo.surrogates,
           surrogateCodePoint: scp,
           id: null
         },
