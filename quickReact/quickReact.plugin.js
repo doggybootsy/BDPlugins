@@ -1,7 +1,7 @@
 /**
  * @name quickReact
  * @description Quickly react to messages. 
- * @version 1.0.1
+ * @version 1.0.2
  * @author doggybootsy
  */
 
@@ -32,12 +32,14 @@ let emoji = BdApi.getData("quickReact", "emoji") ?? [
   {
     animated: false,
     name: "⭐",
+    surrogateCodePoint: "",
     id: null
   },
   {
     alt: "⭐",
     emojiName: ":star:",
     name: ":star:",
+    surrogateCodePoint: "",
     src: "/assets/141d49436743034a59dec6bd5618675d.svg"
   }
 ]
@@ -51,7 +53,7 @@ function Emoji({ emoji, jumbo }) {
         rowIndex: 1,
         size: jumbo ? 48 : 32,
         emoji: allEmojis.find(e => e.allNamesString === emoji.emojiName),
-        surrogateCodePoint: "",
+        surrogateCodePoint: emoji.surrogateCodePoint,
         "aria-label": emoji.emojiName,
         useReducedMotion: false
       })
@@ -71,16 +73,20 @@ function Picker({ setEmoji }) {
   return React.createElement(ExpressionPicker, {
     channel: null,
     onSelectEmoji(emojiInfo) {
+      const scp = Object.keys(emojiInfo.diversityChildren)[Number(emojiInfo.name.split("-").pop())] ?? ""
+
       const newEmoji = [
         {
           animated: false,
-          name: emojiInfo.surrogates,
+          name: scp ? emojiInfo.diversityChildren[scp].surrogates : emojiInfo.name,
+          surrogateCodePoint: scp,
           id: null
         },
         {
           alt: emojiInfo.surrogates,
           emojiName: emojiInfo.allNamesString,
-          name: emojiInfo.allNamesString,
+          name: emojiInfo.name,
+          surrogateCodePoint: scp,
           src: emojiInfo.url
         }
       ]
@@ -135,7 +141,7 @@ function Button({ ttProps, whatEmoji, setEmoji, message }) {
           emoji: whatEmoji
         }),
         onClick: () => react(message),
-        onContextMenu() { setShouldShow(!shouldShow) }
+        onContextMenu: () => setShouldShow(!shouldShow)
       })
     }
   })
@@ -174,15 +180,13 @@ async function updater(name) {
   // Open alert asking to update
   function update() {
     const path = require("path").join(__dirname, "quickReact.plugin.js")
-    const { writeFileSync } = require("fs")
-    writeFileSync(path, "")
-    setImmediate(() => writeFileSync(path, content))
+    require("fs").writeFileSync(path, content)
   }
   if (BdApi.showNotice) BdApi.showNotice(`Plugin update available for ${name}!`, {
     type: "warning",
     number: 0,
     buttons: [{
-      label: `update`,
+      label: "update",
       onClick: (close) => {
         close()
         update()
