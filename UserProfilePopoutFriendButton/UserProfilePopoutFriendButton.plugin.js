@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.0.5
+ * @version 1.0.6
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -136,55 +136,77 @@ const RequestButton = makeFunctionalComponent(function({ user }) {
   })
 }, "RequestButton")
 
-async function updater() {
+// update easily
+async function updater(name) {
   // every 2 hrs run the updater
-  setTimeout(() => updater(), 1000 * 60 * 60 * 2)
+  setTimeout(() => updater(name), 1000 * 60 * 60 * 2)
   // Fetch file
-  const result = await fetch("https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js")
+  const result = await fetch(`https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/${name}/${name}.plugin.js`)
   const content = await result.text()
   // Local
-  const meta = BdApi.Plugins.get("UserProfilePopoutFriendButton")
-  // Read meta
-  const block = content.split("/**", 2)[1].split("*/", 1)[0]
-  const out = {}
-  let field = "", accum = ""
-  for (const line of block.split(/[^\S\r\n]*?(?:\r\n|\n)[^\S\r\n]*?\*[^\S\r\n]?/)) {
-    if (line.length === 0) continue
-    if (line.charAt(0) === "@" && line.charAt(1) !== " ") {
-      out[field] = accum
-      const l = line.indexOf(" ")
-      field = line.substr(1, l - 1)
-      accum = line.substr(l + 1)
-    } 
-    else accum += " " + line.replace("\\n", "\n").replace(/^\\@/, "@")
-  }
-  out[field] = accum.trim()
-  delete out[""]
-  out.format = "jsdoc"
+  const meta = BdApi.Plugins.get(name)
+  const out = await new Promise(r => {
+    // Read meta
+    const block = content.split("/**", 2)[1].split("*/", 1)[0]
+    const out = {}
+    let field = "", accum = ""
+    for (const line of block.split(/[^\S\r\n]*?(?:\r\n|\n)[^\S\r\n]*?\*[^\S\r\n]?/)) {
+      if (line.length === 0) continue
+      if (line.charAt(0) === "@" && line.charAt(1) !== " ") {
+        out[field] = accum
+        const l = line.indexOf(" ")
+        field = line.substring(1, l - 1)
+        accum = line.substring(l + 1)
+      } 
+      else accum += " " + line.replace("\\n", "\n").replace(/^\\@/, "@")
+    }
+    out[field] = accum.trim()
+    delete out[""]
+    out.format = "jsdoc"
+    function resolve() {
+      if (out.version) return r(out)
+      setImmediate(() => resolve())
+    }
+    resolve()
+  })
   // Get versions
   const onlineVersion = Number(out.version.replaceAll(".", ""))
   const localVersion = Number(meta.version.replaceAll(".", ""))
   // if the online version isnt higher return
   if (!(onlineVersion > localVersion)) return
-  // Open alert modal asking to update
-  const { openModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
-  const Alert = BdApi.findModuleByDisplayName("Alert")
-
-  openModal(props => React.createElement(Alert, {
-    ...props,
-    title: "UserProfilePopoutFriendButton",
-    body: "Plugin is out of date!",
-    cancelText: "Skip",
-    confirmText: "Update",
-    onConfirm: () => {
-      require("fs").writeFileSync(require("path").join(__dirname, "UserProfilePopoutFriendButton.plugin.js"), content)
-      location.reload()
-    }
-  }))
+  // Open alert asking to update
+  function update() {
+    const path = require("path").join(__dirname, "quickReact.plugin.js")
+    require("fs").writeFileSync(path, content)
+  }
+  if (BdApi.showNotice) BdApi.showNotice(`Plugin update available for ${name}!`, {
+    type: "warning",
+    number: 0,
+    buttons: [{
+      label: "update",
+      onClick: (close) => {
+        close()
+        update()
+      }
+    }]
+  })
+  else {
+    const { openModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
+    const Alert = BdApi.findModuleByDisplayName("Alert")
+    openModal(props => React.createElement(Alert, {
+      ...props,
+      title: name,
+      body: "Plugin is out of date!",
+      cancelText: "Skip",
+      confirmText: "Update",
+      onConfirm: () => update()
+    }))
+  }
 }
 
 module.exports = class UserProfilePopoutFriendButton {
   start() {
+    updater(this.constructor.name)
     // CSS
     BdApi.injectCSS(this.constructor.name, `.UserProfilePopoutFriendRequest:not(:empty) { display: flex; align-items: center; margin-top: 8px }
 .UserProfilePopoutFriendRequest > :first-child,
@@ -195,8 +217,6 @@ module.exports = class UserProfilePopoutFriendButton {
     BdApi.Patcher.after(this.constructor.name, UserPopout, "UserPopoutInfo", (_, [{ user }], result) => {
       result.props.children.push(React.createElement(RequestButton, { user }))
     })
-    // Run the updater
-    updater()
   }
   stop() {
     // Remove css and patch
