@@ -1,6 +1,6 @@
 /**
  * @name friendIcon
- * @version 1.0.2
+ * @version 1.0.3
  * @author doggybootsy
  * @description Show if a person is a friend, pending a friend request, sent a friend request or blocked
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/friendIcon/friendIcon.plugin.js
@@ -73,7 +73,7 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
-    return closeModal(id)
+    return () => closeModal(id)
   }
 }
 
