@@ -1,8 +1,8 @@
 /**
  * @name friendIcon
- * @version 1.0.0
+ * @version 1.0.1
  * @author doggybootsy
- * @description Concept by immoral
+ * @description Show if a person is a friend, pending a friend request, sent a friend request or blocked
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/friendIcon/friendIcon.plugin.js
  */
 
