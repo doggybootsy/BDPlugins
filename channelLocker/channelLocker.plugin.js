@@ -2,7 +2,7 @@
  * @name channelLocker
  * @description Allows you to look channels locally so you cant talk in them.
  * Based off of https://github.com/TaiAurori/channel-locker
- * @version 1.0.2
+ * @version 1.0.3
  * @author doggybootsy
  */
 
@@ -93,7 +93,7 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
-    return closeModal(id)
+    return () => closeModal(id)
   }
 }
 
