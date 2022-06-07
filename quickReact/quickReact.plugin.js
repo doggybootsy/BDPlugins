@@ -1,7 +1,7 @@
 /**
  * @name quickReact
  * @description Quickly react to messages. 
- * @version 1.0.3
+ * @version 1.0.4
  * @author doggybootsy
  */
 
@@ -61,7 +61,7 @@ function Emoji({ emoji, jumbo }) {
   })
   return React.createElement("div", {
     id: "quickReactEmojiWrapper",
-    style: emoji.url ? null : { zoom: ".7" },
+    style: { zoom: ".7" },
     children: React.createElement(EmojiSpriteSheet, {
         rowIndex: 1,
         size: jumbo ? 48 : 32,
@@ -76,7 +76,8 @@ function Emoji({ emoji, jumbo }) {
 async function react({ id, channel_id }) {
   const reactions = await ReactionModule.getReactions(channel_id, id, emoji[0])
 
-  if (reactions.find(({ id }) => id === getCurrentUser().id)) return ReactionModule.removeReaction(channel_id, id, emoji[0])
+  if (reactions.find(({ id }) => id === getCurrentUser().id)) 
+    return ReactionModule.removeReaction(channel_id, id, emoji[0])
   ReactionModule.addReaction(channel_id, id, emoji[0])
 }
 // listeners to update the buttons
@@ -134,31 +135,40 @@ function settings() {
   })
 }
 // button
-function Button({ ttProps, whatEmoji, setEmoji, message }) {
+const Button = React.memo(function({ whatEmoji, setEmoji, message }) {
   const [shouldShow, setShouldShow] = React.useState(false)
 
-  return React.createElement(Popout, {
-    shouldShow,
-    onRequestClose: () => setShouldShow(false),
-    position: Popout.Positions.LEFT,
-    animation: Popout.Animation.SCALE,
-    renderPopout: () => React.createElement(Picker, { setEmoji: (emoji) => {
-      setEmoji(emoji)
-      setShouldShow(false)
-    }}),
-    children: (poProps) => {
-      return React.createElement(MiniPopover.Button, {
-        ...ttProps,
-        ...poProps,
-        children: React.createElement(Emoji, {
-          emoji: whatEmoji
-        }),
-        onClick: () => react(message),
-        onContextMenu: () => setShouldShow(!shouldShow)
-      })
-    }
+  return React.createElement(Tooltip, {
+    text: whatEmoji.emojiName,
+    children: (ttProps) => React.createElement(Popout, {
+      shouldShow,
+      onRequestClose: () => {
+        setShouldShow(false)
+      },
+      position: Popout.Positions.LEFT,
+      animation: Popout.Animation.NONE,
+      renderPopout: () => React.createElement(Picker, {
+        setEmoji: (emoji) => {
+          setEmoji(emoji)
+          setShouldShow(false)
+        }}
+      ),
+      children: (poProps) => {
+        return React.createElement(MiniPopover.Button, {
+          ...ttProps,
+          ...poProps,
+          children: React.createElement(Emoji, {
+            emoji: whatEmoji
+          }),
+          onClick: () => react(message),
+          onContextMenu: () => {
+            setShouldShow(!shouldShow)
+          }
+        })
+      }
+    })
   })
-}
+})
 // update easily
 async function updater(name) {
   // every 2 hrs run the updater
@@ -166,25 +176,34 @@ async function updater(name) {
   // Fetch file
   const result = await fetch(`https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/${name}/${name}.plugin.js`)
   const content = await result.text()
+  // If error
+  if (content === "404: Not Found") return
   // Local
-  const meta = BdApi.Plugins.get("quickReact")
-  // Read meta
-  const block = content.split("/**", 2)[1].split("*/", 1)[0]
-  const out = {}
-  let field = "", accum = ""
-  for (const line of block.split(/[^\S\r\n]*?(?:\r\n|\n)[^\S\r\n]*?\*[^\S\r\n]?/)) {
-    if (line.length === 0) continue
-    if (line.charAt(0) === "@" && line.charAt(1) !== " ") {
-      out[field] = accum
-      const l = line.indexOf(" ")
-      field = line.substr(1, l - 1)
-      accum = line.substr(l + 1)
-    } 
-    else accum += " " + line.replace("\\n", "\n").replace(/^\\@/, "@")
-  }
-  out[field] = accum.trim()
-  delete out[""]
-  out.format = "jsdoc"
+  const meta = BdApi.Plugins.get(name)
+  const out = await new Promise(r => {
+    // Read meta
+    const block = content.split("/**", 2)[1].split("*/", 1)[0]
+    const out = {}
+    let field = "", accum = ""
+    for (const line of block.split(/[^\S\r\n]*?(?:\r\n|\n)[^\S\r\n]*?\*[^\S\r\n]?/)) {
+      if (line.length === 0) continue
+      if (line.charAt(0) === "@" && line.charAt(1) !== " ") {
+        out[field] = accum
+        const l = line.indexOf(" ")
+        field = line.substring(1, l - 1)
+        accum = line.substring(l + 1)
+      } 
+      else accum += " " + line.replace("\\n", "\n").replace(/^\\@/, "@")
+    }
+    out[field] = accum.trim()
+    delete out[""]
+    out.format = "jsdoc"
+    function resolve() {
+      if (out.version) return r(out)
+      setImmediate(() => resolve())
+    }
+    resolve()
+  })
   // Get versions
   const onlineVersion = Number(out.version.replaceAll(".", ""))
   const localVersion = Number(meta.version.replaceAll(".", ""))
@@ -192,10 +211,10 @@ async function updater(name) {
   if (!(onlineVersion > localVersion)) return
   // Open alert asking to update
   function update() {
-    const path = require("path").join(__dirname, "quickReact.plugin.js")
+    const path = require("path").resolve(__dirname, __filename)
     require("fs").writeFileSync(path, content)
   }
-  if (BdApi.showNotice) BdApi.showNotice(`Plugin update available for ${name}!`, {
+  if (BdApi.showNotice) return BdApi.showNotice(`Plugin update available for ${name}!`, {
     type: "warning",
     number: 0,
     buttons: [{
@@ -207,9 +226,9 @@ async function updater(name) {
     }]
   })
   else {
-    const { openModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
+    const { openModal, closeModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
     const Alert = BdApi.findModuleByDisplayName("Alert")
-    openModal(props => React.createElement(Alert, {
+    const id = openModal(props => React.createElement(Alert, {
       ...props,
       title: name,
       body: "Plugin is out of date!",
@@ -217,12 +236,14 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
+    return closeModal(id)
   }
 }
 // Plugin
 module.exports = class quickReact {
+  load() { this.stopUpdater = () => {} }
   start() {
-    updater(this.constructor.name)
+    this.stopUpdater = updater(this.constructor.name)
     // css for settings
     BdApi.injectCSS("quickReact", "#quickReact > #emoji-picker-tab-panel > :first-child { width: 100% }")
     // Patch
@@ -230,6 +251,7 @@ module.exports = class quickReact {
       if (!args[0].children[args[0].children.length - 1]?.props?.message) return 
       const child = res.props.children.find(e => e)
       if (!child) return 
+
       const oldType = child.type
       child.type = (...args) => {
         const res = Reflect.apply(oldType, this, args)
@@ -245,11 +267,8 @@ module.exports = class quickReact {
         })
 
         if (whatEmoji) res.props.children.unshift(
-          React.createElement(Tooltip, {
-            text: whatEmoji.emojiName,
-            children: (ttProps) => React.createElement(Button, {
-              ttProps, whatEmoji, setEmoji, message: args[0].message
-            })
+          React.createElement(Button, {
+            whatEmoji, setEmoji, message: args[0].message
           })
         )
 
@@ -257,12 +276,13 @@ module.exports = class quickReact {
       }
     })
   }
-  stop() {
+  async stop() {
     // to rerenderer the elmenents
     for (const listener of [...listeners]) listener(false)
     // undo
     BdApi.Patcher.unpatchAll("quickReact")
-    BdApi.injectCSS("quickReact")
+    BdApi.clearCSS("quickReact")
+    void (await this.stopUpdater)()
   }
   getSettingsPanel() { return React.createElement(settings) }
 }
