@@ -2,7 +2,7 @@
  * @name channelLocker
  * @description Allows you to look channels locally so you cant talk in them.
  * Based off of https://github.com/TaiAurori/channel-locker
- * @version 1.0.1
+ * @version 1.0.2
  * @author doggybootsy
  */
 
@@ -33,6 +33,8 @@ async function updater(name) {
   // Fetch file
   const result = await fetch(`https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/${name}/${name}.plugin.js`)
   const content = await result.text()
+  // If error
+  if (content === "404: Not Found") return
   // Local
   const meta = BdApi.Plugins.get(name)
   const out = await new Promise(r => {
@@ -66,10 +68,10 @@ async function updater(name) {
   if (!(onlineVersion > localVersion)) return
   // Open alert asking to update
   function update() {
-    const path = require("path").join(__dirname, "quickReact.plugin.js")
+    const path = require("path").resolve(__dirname, __filename)
     require("fs").writeFileSync(path, content)
   }
-  if (BdApi.showNotice) BdApi.showNotice(`Plugin update available for ${name}!`, {
+  if (BdApi.showNotice) return BdApi.showNotice(`Plugin update available for ${name}!`, {
     type: "warning",
     number: 0,
     buttons: [{
@@ -81,9 +83,9 @@ async function updater(name) {
     }]
   })
   else {
-    const { openModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
+    const { openModal, closeModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
     const Alert = BdApi.findModuleByDisplayName("Alert")
-    openModal(props => React.createElement(Alert, {
+    const id = openModal(props => React.createElement(Alert, {
       ...props,
       title: name,
       body: "Plugin is out of date!",
@@ -91,10 +93,12 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
+    return closeModal(id)
   }
 }
 
 module.exports = class channelLocker {
+  load() { this.stopUpdater = () => {} }
   isLocked(id) {
     return getData("channels").find(e => e === id) ?? false
   }
@@ -155,7 +159,7 @@ module.exports = class channelLocker {
   }
 
   start() {
-    updater(this.constructor.name)
+    this.stopUpdater = updater(this.constructor.name)
     const CTA = this.generateCTA()
     BdApi.Patcher.after(this.constructor.name, ChannelTextAreaButtons, "type", (_, [props], res) => {
       if (!res) return
@@ -175,7 +179,10 @@ module.exports = class channelLocker {
       return React.createElement(CTA, { res })
     })
   }
-  stop() { BdApi.Patcher.unpatchAll(this.constructor.name) }
+  async stop() {
+    BdApi.Patcher.unpatchAll(this.constructor.name)
+    void (await this.stopUpdater)()
+  }
   getSettingsPanel() {
     return React.createElement(() => {
       const [ico, setICO] = React.useState(getData("iconOrString"))
