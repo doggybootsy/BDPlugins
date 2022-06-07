@@ -1,7 +1,7 @@
 /**
  * @name ReportMessages
  * @description Report messages within discord. 
- * @version 1.0.1
+ * @version 1.0.2
  * @author doggybootsy
  */
 
@@ -29,6 +29,8 @@ async function updater(name) {
   // Fetch file
   const result = await fetch(`https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/${name}/${name}.plugin.js`)
   const content = await result.text()
+  // If error
+  if (content === "404: Not Found") return
   // Local
   const meta = BdApi.Plugins.get(name)
   const out = await new Promise(r => {
@@ -62,10 +64,10 @@ async function updater(name) {
   if (!(onlineVersion > localVersion)) return
   // Open alert asking to update
   function update() {
-    const path = require("path").join(__dirname, "quickReact.plugin.js")
+    const path = require("path").resolve(__dirname, __filename)
     require("fs").writeFileSync(path, content)
   }
-  if (BdApi.showNotice) BdApi.showNotice(`Plugin update available for ${name}!`, {
+  if (BdApi.showNotice) return BdApi.showNotice(`Plugin update available for ${name}!`, {
     type: "warning",
     number: 0,
     buttons: [{
@@ -77,9 +79,9 @@ async function updater(name) {
     }]
   })
   else {
-    const { openModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
+    const { openModal, closeModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
     const Alert = BdApi.findModuleByDisplayName("Alert")
-    openModal(props => React.createElement(Alert, {
+    const id = openModal(props => React.createElement(Alert, {
       ...props,
       title: name,
       body: "Plugin is out of date!",
@@ -87,9 +89,9 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
+    return () => closeModal(id)
   }
 }
-
 module.exports = class ReportMessages {
   getName() { return Messages.REPORT_MESSAGE_MENU_OPTION }
   get enabled() { return BdApi.Plugins.isEnabled("ReportMessages") }
@@ -99,16 +101,17 @@ module.exports = class ReportMessages {
       body: body.map((c) => typeof(c) === "string" ? React.createElement(Markdown, {}, c) : c)
     }))
   }
-  async load() {
+  load() {
     // set the shown prompt to 'true'
     setData("showedPrompt", true)
     // if no zlib prompt
     if (!window.ZLibrary?.DCM && !showedPrompt) return this.alert("Install **Zlibrary** for more features.", "**Warning**: Spam reporting can get you banned.")
     // show warning
     if (!showedPrompt) this.alert("Spam reporting can get you banned.")
+    this.stopUpdater = () => {}
   }
   async start() {
-    updater(this.constructor.name)
+    this.stopUpdater = updater(this.constructor.name)
     // patch 'MiniPopover' and enable the button
     BdApi.Patcher.after("ReportMessages", MiniPopover, "default", (_, args, res) => {
       if (!args[0].children[args[0].children.length - 1]?.props?.message) return 
@@ -151,7 +154,10 @@ module.exports = class ReportMessages {
       )
     })
   }
-  stop() { BdApi.Patcher.unpatchAll("ReportMessages") }
+  async stop() {
+    BdApi.Patcher.unpatchAll("ReportMessages")
+    void (await this.stopUpdater)()
+  }
   getSettingsPanel() {
     return React.createElement(() => {
       const [MCN, setMCN] = React.useState(getData("MCN") ?? true)
