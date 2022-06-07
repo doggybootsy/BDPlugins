@@ -1,6 +1,6 @@
 /**
  * @name friendIcon
- * @version 1.0.1
+ * @version 1.0.2
  * @author doggybootsy
  * @description Show if a person is a friend, pending a friend request, sent a friend request or blocked
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/friendIcon/friendIcon.plugin.js
@@ -48,10 +48,10 @@ async function updater(name) {
   if (!(onlineVersion > localVersion)) return
   // Open alert asking to update
   function update() {
-    const path = require("path").join(__dirname, "quickReact.plugin.js")
+    const path = require("path").resolve(__dirname, __filename)
     require("fs").writeFileSync(path, content)
   }
-  if (BdApi.showNotice) BdApi.showNotice(`Plugin update available for ${name}!`, {
+  if (BdApi.showNotice) return BdApi.showNotice(`Plugin update available for ${name}!`, {
     type: "warning",
     number: 0,
     buttons: [{
@@ -63,9 +63,9 @@ async function updater(name) {
     }]
   })
   else {
-    const { openModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
+    const { openModal, closeModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
     const Alert = BdApi.findModuleByDisplayName("Alert")
-    openModal(props => React.createElement(Alert, {
+    const id = openModal(props => React.createElement(Alert, {
       ...props,
       title: name,
       body: "Plugin is out of date!",
@@ -73,6 +73,7 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
+    return closeModal(id)
   }
 }
 
@@ -139,16 +140,18 @@ const css = `.friendIcon {
 }`
 
 module.exports = class friendIcon {
+  load() { this.stopUpdater = () => {} }
   start() {
-    updater(this.constructor.name)
+    this.stopUpdater = updater(this.constructor.name)
     BdApi.injectCSS("friendIcon", css)
     BdApi.Patcher.after("friendIcon", MessageHeader, "default", (_, [args], res) => {
       if (!Array.isArray(res.props.username)) res.props.username = [res.props.username]
       res.props.username.push(React.createElement(icon, { author: args.message.author }))
     })
   }
-  stop() {
+  async stop() {
     BdApi.Patcher.unpatchAll("friendIcon")
     BdApi.clearCSS("friendIcon")
+    void (await this.stopUpdater)()
   }
 }
