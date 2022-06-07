@@ -1,6 +1,6 @@
 /**
  * @name friendIcon
- * @version 1.0.3
+ * @version 1.0.4
  * @author doggybootsy
  * @description Show if a person is a friend, pending a friend request, sent a friend request or blocked
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/friendIcon/friendIcon.plugin.js
@@ -36,13 +36,15 @@ async function updater(name) {
     delete out[""]
     out.format = "jsdoc"
     function resolve() {
-      if (out.version) return r(out)
+      const keys = Object.keys(out)
+      const versionKey = keys.find(e => e.startsWith("vers"))
+      if (versionKey) return r(out[versionKey])
       setImmediate(() => resolve())
     }
     resolve()
   })
-  // Get versions
-  const onlineVersion = Number(out.version.replaceAll(".", ""))
+  // Get version
+  const onlineVersion = Number(out.replaceAll(".", ""))
   const localVersion = Number(meta.version.replaceAll(".", ""))
   // if the online version isnt higher return
   if (!(onlineVersion > localVersion)) return
