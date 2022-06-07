@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.0.7
+ * @version 1.0.8
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -202,7 +202,7 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
-    return closeModal(id)
+    return () => closeModal(id)
   }
 }
 
