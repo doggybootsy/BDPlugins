@@ -1,7 +1,7 @@
 /**
  * @name quickReact
  * @description Quickly react to messages. 
- * @version 1.0.4
+ * @version 1.0.5
  * @author doggybootsy
  */
 
@@ -236,7 +236,7 @@ async function updater(name) {
       confirmText: "Update",
       onConfirm: () => update()
     }))
-    return closeModal(id)
+    return () => closeModal(id)
   }
 }
 // Plugin
