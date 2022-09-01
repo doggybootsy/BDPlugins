@@ -1,124 +1,54 @@
 /**
  * @name friendIcon
- * @version 1.0.4
+ * @version 1.0.5
  * @author doggybootsy
  * @description Show if a person is a friend, pending a friend request, sent a friend request or blocked
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/friendIcon/friendIcon.plugin.js
  */
 
-// update easily
-async function updater(name) {
-  // every 2 hrs run the updater
-  setTimeout(() => updater(name), 1000 * 60 * 60 * 2)
-  // Fetch file
-  const result = await fetch(`https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/${name}/${name}.plugin.js`)
-  const content = await result.text()
-  // If error
-  if (content === "404: Not Found") return
-  // Local
-  const meta = BdApi.Plugins.get(name)
-  const out = await new Promise(r => {
-    // Read meta
-    const block = content.split("/**", 2)[1].split("*/", 1)[0]
-    const out = {}
-    let field = "", accum = ""
-    for (const line of block.split(/[^\S\r\n]*?(?:\r\n|\n)[^\S\r\n]*?\*[^\S\r\n]?/)) {
-      if (line.length === 0) continue
-      if (line.charAt(0) === "@" && line.charAt(1) !== " ") {
-        out[field] = accum
-        const l = line.indexOf(" ")
-        field = line.substring(1, l - 1)
-        accum = line.substring(l + 1)
-      } 
-      else accum += " " + line.replace("\\n", "\n").replace(/^\\@/, "@")
-    }
-    out[field] = accum.trim()
-    delete out[""]
-    out.format = "jsdoc"
-    function resolve() {
-      const keys = Object.keys(out)
-      const versionKey = keys.find(e => e.startsWith("vers"))
-      if (versionKey) return r(out[versionKey])
-      setImmediate(() => resolve())
-    }
-    resolve()
-  })
-  // Get version
-  const onlineVersion = Number(out.replaceAll(".", ""))
-  const localVersion = Number(meta.version.replaceAll(".", ""))
-  // if the online version isnt higher return
-  if (!(onlineVersion > localVersion)) return
-  // Open alert asking to update
-  function update() {
-    const path = require("path").resolve(__dirname, __filename)
-    require("fs").writeFileSync(path, content)
-  }
-  if (BdApi.showNotice) return BdApi.showNotice(`Plugin update available for ${name}!`, {
-    type: "warning",
-    number: 0,
-    buttons: [{
-      label: "update",
-      onClick: (close) => {
-        close()
-        update()
-      }
-    }]
-  })
-  else {
-    const { openModal, closeModal } = BdApi.findModuleByProps("openModal", "openModalLazy")
-    const Alert = BdApi.findModuleByDisplayName("Alert")
-    const id = openModal(props => React.createElement(Alert, {
-      ...props,
-      title: name,
-      body: "Plugin is out of date!",
-      cancelText: "Skip",
-      confirmText: "Update",
-      onConfirm: () => update()
-    }))
-    return () => closeModal(id)
-  }
-}
+const { React, Webpack } = BdApi
 
-const MessageHeader = BdApi.findModule(e => e.default?.displayName === "MessageHeader")
-const dispatch = BdApi.findModuleByProps("dispatch", "dirtyDispatch")
-const Tooltip = BdApi.findModuleByDisplayName("Tooltip")
-const { Messages } = BdApi.findModule(e => e._events?.locale && Array.isArray(e._events?.locale))
-const { getRelationshipType } = BdApi.findModuleByProps("getRelationshipType")
-const { React } = BdApi
+const MessageHeader = Webpack.getModule(e => e.default?.displayName === "MessageHeader")
+const Tooltip = Webpack.getModule(m => m.displayName === "Tooltip")
+
+const { Messages } = Webpack.getModule(e => e._events?.locale && Array.isArray(e._events?.locale))
+const RelationshipStore = Webpack.getModule(m => m.getRelationshipType)
+const { useStateFromStores } = Webpack.getModule(m => m.useStateFromStores)
 
 const relationShipTypes = [
-  null,
-  [BdApi.findModuleByDisplayName("PersonWaving"), Messages.FRIENDS],
-  [BdApi.findModuleByDisplayName("Blocked"), Messages.BLOCKED],
-  [BdApi.findModuleByDisplayName("PersonAdd"), Messages.FRIEND_REQUEST_ACCEPT],
-  [BdApi.findModuleByDisplayName("Pending"), Messages.FRIENDS_SECTION_PENDING]
+  [ ],
+  [
+    Webpack.getModule(m => m.displayName === "PersonWaving"), 
+    Messages.FRIENDS
+  ],
+  [
+    Webpack.getModule(m => m.displayName === "Blocked"), 
+    Messages.BLOCKED
+  ],
+  [
+    Webpack.getModule(m => m.displayName === "PersonAdd"), 
+    Messages.FRIEND_REQUEST_ACCEPT
+  ],
+  [
+    Webpack.getModule(m => m.displayName === "Pending"), 
+    Messages.FRIENDS_SECTION_PENDING
+  ]
 ]
 
-function icon({ author }) {
-  const [relationShip, setRelationShip] = React.useState(getRelationshipType(author.id))
-  const type = relationShipTypes[relationShip]
-  React.useEffect(() => {
-    function onRelationChange({ relationship }) {
-      if (relationship.id === author.id) setRelationShip(getRelationshipType(author.id))
-    }
-    dispatch.subscribe("RELATIONSHIP_REMOVE", onRelationChange)
-    dispatch.subscribe("RELATIONSHIP_ADD", onRelationChange)
-    return () => {
-      dispatch.unsubscribe("RELATIONSHIP_REMOVE", onRelationChange)
-      dispatch.unsubscribe("RELATIONSHIP_ADD", onRelationChange)
-    }
-  })
-  return type ? React.createElement(Tooltip, {
-    text: type[1],
-    children: (props) => React.createElement(type[0], {
+function Icon({ author }) {
+  const [ icon, text ] = useStateFromStores([ RelationshipStore ], () => relationShipTypes[RelationshipStore.getRelationshipType(author.id)])
+  
+  return icon ? React.createElement(Tooltip, {
+    text: text,
+    children: (props) => React.createElement(icon, {
       onMouseLeave: props.onMouseLeave,
       onMouseEnter: props.onMouseEnter,
       className: "friendIcon"
     })
-  }) : false
+  }) : null
 }
 
-const CSSBlockedLabel = relationShipTypes[2][1]
+const cssBlockedLabel = JSON.stringify(Messages.BLOCKED)
 const css = `.friendIcon {
   display: inline-block;
   overflow: hidden;
@@ -133,27 +63,24 @@ const css = `.friendIcon {
   cursor: pointer;
 } .friendIcon:hover {
   color: var(--text-normal)
-} .friendIcon[aria-label="${CSSBlockedLabel}"] {
+} .friendIcon[aria-label=${cssBlockedLabel}] {
   color: var(--button-danger-background);
-} .friendIcon[aria-label="${CSSBlockedLabel}"]:hover {
+} .friendIcon[aria-label=${cssBlockedLabel}]:hover {
   color: var(--button-danger-background-hover);
-} .friendIcon[aria-label="${CSSBlockedLabel}"]:active {
+} .friendIcon[aria-label=${cssBlockedLabel}]:active {
   color: var(--button-danger-background-active);
 }`
 
 module.exports = class friendIcon {
-  load() { this.stopUpdater = () => {} }
   start() {
-    this.stopUpdater = updater(this.constructor.name)
     BdApi.injectCSS("friendIcon", css)
     BdApi.Patcher.after("friendIcon", MessageHeader, "default", (_, [args], res) => {
       if (!Array.isArray(res.props.username)) res.props.username = [res.props.username]
-      res.props.username.push(React.createElement(icon, { author: args.message.author }))
+      res.props.username.push(React.createElement(Icon, { author: args.message.author }))
     })
   }
-  async stop() {
+  stop() {
     BdApi.Patcher.unpatchAll("friendIcon")
     BdApi.clearCSS("friendIcon")
-    void (await this.stopUpdater)()
   }
 }
