@@ -109,7 +109,6 @@ const modules = {
   async: asyncModules()
 }
 modules.async.then(m => Object.entries(m).map(([k,v]) => modules[k] = v))
-window.t = modules
 
 function RequestButton({ user, onClose }) {
   const { relationshipType, isCurrentUser } = useStateFromStores([ RelationshipStore, UserStore ], () => ({
