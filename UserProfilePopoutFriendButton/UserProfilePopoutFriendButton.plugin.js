@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.0.8
+ * @version 1.0.9
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -48,9 +48,10 @@ const asyncModules = async () => {
   const cache = {
     UserProfileActionsMenu: Webpack.getModule(Filters.UserProfileActionsMenu), 
     UserProfileFriendRequestButton: Webpack.getModule(Filters.UserProfileFriendRequestButton), 
-    classes: Webpack.getModule(Filters.classes)
+    classes: Webpack.getModule(Filters.classes),
+    actionClasses: Webpack.getModule(Filters.actionClasses)
   }
-  if (Object.values(cache).filter(m => m).length === 3) return cache
+  if (Object.values(cache).filter(m => m).length === 4) return cache
 
   function fakeRenderAndClick(element, selector) {
     const node = document.createElement("div")
@@ -86,7 +87,7 @@ const asyncModules = async () => {
   
   fakeRenderAndClick(React.createElement(UserPopoutContainer, {
     userId: Object.keys(RelationshipStore.getRelationships())[0]
-  }), () => `.${otherClasses.avatar}`)
+  }), () => `.${otherClasses.avatarWrapper}`)
   
   const all = Promise.all([
     Webpack.waitForModule(Filters.UserProfileFriendRequestButton),
@@ -108,6 +109,7 @@ const asyncModules = async () => {
 const modules = {
   async: asyncModules()
 }
+
 modules.async.then(m => Object.entries(m).map(([k,v]) => modules[k] = v))
 
 function RequestButton({ user, onClose }) {
@@ -178,7 +180,10 @@ const css = `.UserProfilePopoutFriendRequest:not(:empty) { display: flex; align-
 .UserProfilePopoutFriendRequest > :first-child:last-child { margin-left: auto }`
 
 module.exports = class UserProfilePopoutFriendButton {
+  stopped = true
   start() {
+    this.stopped = false
+
     Patcher.after("UserProfilePopoutFriendButton", UserBody, "default", (that, [ props ], res) => {
       let i = res.props.children.indexOf(res.props.children.find(child => child.props.customStatusActivity))
       if (!~i) i++
@@ -186,10 +191,12 @@ module.exports = class UserProfilePopoutFriendButton {
     })
 
     if (this.actionClasses) injectCSS("UserProfilePopoutFriendButton", css.replace("{{pendingIncoming}}", this.actionClasses.pendingIncoming))
-    else modules.async.then(m => (this.actionClasses = m.actionClasses) && injectCSS("UserProfilePopoutFriendButton", css.replace("{{pendingIncoming}}", this.actionClasses.pendingIncoming)))
+    else modules.async.then(m => this.stopped ? null : (this.actionClasses = m.actionClasses) && injectCSS("UserProfilePopoutFriendButton", css.replace("{{pendingIncoming}}", this.actionClasses.pendingIncoming)))
   }
   stop() {
     Patcher.unpatchAll("UserProfilePopoutFriendButton")
     clearCSS("UserProfilePopoutFriendButton")
+    this.stopped = true
   }
 }
+
