@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.1.1
+ * @version 1.1.2
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -205,6 +205,7 @@ module.exports = class UserProfilePopoutFriendButton {
     this.stopped = false
 
     Patcher.after("UserProfilePopoutFriendButton", UserBody, "default", (that, [ props ], res) => {
+      if (!res) return
       let i = res.props.children.indexOf(res.props.children.find(child => child.props.customStatusActivity))
       if (!~i) i++
       res.props.children.splice(i + 1, 0, React.createElement(RequestButton, { user: props.user, onClose: props.onClose }))
