@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.0.9
+ * @version 1.1.0
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -37,7 +37,7 @@ const Filters = {
     return str.includes("AnalyticsLocationProvider") && !str.includes("pendingColors") && !m.default.displayName && !m.LocationContext
   },
   UserProfileFriendRequestButton: m => m.displayName === "UserProfileFriendRequestButton",
-  classes: m => m.additionalActionsIcon,
+  classes: m => m.additionalActionsIcon && m.customStatus,
   otherClasses: m => m.avatar && m.guildMemberProfileTooltipNitroWheel,
   actionClasses: m => m.pendingIncoming && m.actionButton
 }
@@ -57,7 +57,10 @@ const asyncModules = async () => {
     const node = document.createElement("div")
     ReactDOM.render(element, node)
     if (!cache.classes) cache.classes = Webpack.getModule(Filters.classes)
-    if (selector) node.querySelector(selector()).click()
+    if (selector) {
+      const query = node.querySelector(selector())
+      if (query) query.click()
+    }
     ReactDOM.unmountComponentAtNode(node)
   }
 
