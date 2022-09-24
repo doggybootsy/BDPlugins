@@ -1,6 +1,6 @@
 /**
  * @name UserProfilePopoutFriendButton 
- * @version 1.1.0
+ * @version 1.1.1
  * @author doggybootsy
  * @description Adds the friend request button from user modals to user propouts
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/UserProfilePopoutFriendButton/UserProfilePopoutFriendButton.plugin.js
@@ -16,6 +16,7 @@ const { useStateFromStores } = Webpack.getModule(m => m.useStateFromStores)
 
 const Clickable = Webpack.getModule(m => m.displayName === "Clickable")
 const OverflowMenu = Webpack.getModule(m => m.displayName === "OverflowMenu")
+const SwitchItem = Webpack.getModule(m => m.displayName === "SwitchItem")
 
 const { section } = Webpack.getModule(m => m.section && m.lastSection)
   
@@ -182,8 +183,24 @@ const css = `.UserProfilePopoutFriendRequest:not(:empty) { display: flex; align-
 .UserProfilePopoutFriendRequest > .{{pendingIncoming}} > button { width: 100% }
 .UserProfilePopoutFriendRequest > :first-child:last-child { margin-left: auto }`
 
+let shouldShowDMUser = BdApi.getData("UserProfilePopoutFriendButton", "shouldShowDMUser") ?? false
+function Settings() {
+  const [ val, setVal ] = React.useState(shouldShowDMUser)
+
+  return React.createElement(SwitchItem, {
+    value: val,
+    children: "Show DM user section",
+    onChange: (val) => {
+      setVal(val)
+      BdApi.setData("UserProfilePopoutFriendButton", "shouldShowDMUser", val)
+      shouldShowDMUser = val
+    }
+  })
+}
+
 module.exports = class UserProfilePopoutFriendButton {
   stopped = true
+  getSettingsPanel() { return React.createElement(Settings) }
   start() {
     this.stopped = false
 
@@ -191,6 +208,7 @@ module.exports = class UserProfilePopoutFriendButton {
       let i = res.props.children.indexOf(res.props.children.find(child => child.props.customStatusActivity))
       if (!~i) i++
       res.props.children.splice(i + 1, 0, React.createElement(RequestButton, { user: props.user, onClose: props.onClose }))
+      if (!shouldShowDMUser) res.props.children.find(child => child.type.render).props.children.pop()
     })
 
     if (this.actionClasses) injectCSS("UserProfilePopoutFriendButton", css.replace("{{pendingIncoming}}", this.actionClasses.pendingIncoming))
@@ -202,4 +220,3 @@ module.exports = class UserProfilePopoutFriendButton {
     this.stopped = true
   }
 }
-
