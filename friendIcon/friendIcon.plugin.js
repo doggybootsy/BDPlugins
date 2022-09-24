@@ -1,6 +1,6 @@
 /**
  * @name friendIcon
- * @version 1.0.5
+ * @version 1.0.6
  * @author doggybootsy
  * @description Show if a person is a friend, pending a friend request, sent a friend request or blocked
  * @updateUrl https://raw.githubusercontent.com/doggybootsy/BDPlugins/main/friendIcon/friendIcon.plugin.js
@@ -14,6 +14,7 @@ const Tooltip = Webpack.getModule(m => m.displayName === "Tooltip")
 const { Messages } = Webpack.getModule(e => e._events?.locale && Array.isArray(e._events?.locale))
 const RelationshipStore = Webpack.getModule(m => m.getRelationshipType)
 const { useStateFromStores } = Webpack.getModule(m => m.useStateFromStores)
+const { messageListItem } = Webpack.getModule(m => m.messageListItem)
 
 const relationShipTypes = [
   [ ],
@@ -78,6 +79,7 @@ module.exports = class friendIcon {
       if (!Array.isArray(res.props.username)) res.props.username = [res.props.username]
       res.props.username.push(React.createElement(Icon, { author: args.message.author }))
     })
+    Array.from(document.querySelectorAll(`.${messageListItem}`), n => BdApi.getInternalInstance(n).child.memoizedProps.onMouseMove())
   }
   stop() {
     BdApi.Patcher.unpatchAll("friendIcon")
