@@ -2,7 +2,7 @@
  * @name RemoveNoRole
  * @author Doggybootsy
  * @description Remove the "NO ROLES" from user popouts
- * @version 1.6
+ * @version 1.7
  * @source https://github.com/doggybootsy/BDPlugins/
  * @website https://doggybootsy.github.io/
  */
@@ -16,9 +16,8 @@ const userPopoutInner = classes.userPopoutInner.split(" ")[0]
 module.exports = class Remove_no_role {  
   observer() {
     const node = document.querySelector(`.${userPopoutInner} .${root}`)
-    if (!node) return
-    const children = Array.from(node.children).filter(m => !m.classList.contains(addButton))
-    if (children.length) return node.parentElement.style.display = ""
+    if (!node) return 
+    if (node.querySelector(`.${addButton}`)) return node.parentElement.style.display = ""
     node.parentElement.style.display = "none"
   }
 
