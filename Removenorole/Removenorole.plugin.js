@@ -2,39 +2,42 @@
  * @name RemoveNoRole
  * @author Doggybootsy
  * @description Remove the "NO ROLES" from user popouts
- * @version 2.0
+ * @version 2.1
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
-const { Webpack, Patcher } = BdApi
+const { Patcher, Webpack } = new BdApi("RemoveNoRole")
 
 const UserBody = Webpack.getModule(m => {
-  if (!m.default) return
-  const str = m.default.toString()
+  if (!m.Z) return
+  const str = m.Z.toString()
   return str.includes(".customStatusActivity") && str.includes(".getUserProfile") && str.includes("usernameIcon:")
 })
 
-const PermissionStore = Webpack.getModule(m => m.canManageUser && m.can)
-const { useStateFromStores } = Webpack.getModule(m => m.useStateFromStores)
+const PermissionStore = Webpack.getModule(m => m.Z?.getName?.() === "PermissionStore").Z
+const useStateFromStores = Webpack.getModule(m => m.toString().includes("useStateFromStores"))
 
-const { MANAGE_ROLES } = Webpack.getModule(m => m.Permissions?.MANAGE_ROLES).Permissions
+let MANAGE_ROLES
+Webpack.getModule(m => Object.values(m).find((data) => data?.MANAGE_ROLES && (MANAGE_ROLES = data.MANAGE_ROLES)))
 
 module.exports = class { 
   start() {
-    Patcher.after("RemoveNoRole", UserBody, "default", (that, [ props ], res) => {
+    Patcher.after(UserBody, "Z", (that, [ props ], res) => {
       if (!props.guild || !res) return
 
       const canAddRoles = useStateFromStores([ PermissionStore ], () => PermissionStore.canManageUser(MANAGE_ROLES, props.user, props.guild))
 
-      const Body = res.props.children.find(child => child.type.render)
-      const RolesSection = Body.props.children.find(child => child?.type?.displayName === "RolesSection")
+      const Body = res.props.children.find(child => child.props.children);
+      const Content = Body.props.children.find(child => child.type.render);
+
+      const RolesSection = Content.props.children.find(child => child?.props?.guildMember && child?.props?.user)
 
       if (RolesSection.props.guildMember.roles.length || canAddRoles) return
 
-      Body.props.children.splice(Body.props.children.indexOf(RolesSection), 1)
+      Content.props.children.splice(Content.props.children.indexOf(RolesSection), 1)
     })
   }
   stop() {
-    Patcher.unpatchAll("RemoveNoRole")
+    Patcher.unpatchAll()
   }
 }
