@@ -1,6 +1,6 @@
 /**
  * @name ChangeSwitchColor 
- * @version 1.0.0
+ * @version 1.0.1
  * @author doggybootsy
  * @description Change discords switch color to a preset or a custom color
  */
@@ -30,15 +30,17 @@ const allColors = Object.assign({}, AppColorStore.getAllColors());
 // Color Dropdowns
 const colors = Object.entries(AppColorStore.getAllColors()).map(([ k, v ]) => ({ value: k, label: `${k}: ${v.hex}` }));
 colors.push({ value: "#3e82e5", label: "BetterDiscord: #3e82e5" });
+// util
+const getKey = checked => checked ? "status-green-600" : "primary-dark-400";
 // Settings
 function getSetting(checked) {
-  const key = checked ? "status-green-600" : "primary-dark-400";
+  const key = getKey(checked);
   const saved = Data.load(key);
   if (saved) return saved;
   return key;
 }
 function setSetting(checked, value) {
-  const key = checked ? "status-green-600" : "primary-dark-400";
+  const key = getKey(checked);
   Data.save(key, value);
 }
 // Color Util
@@ -153,12 +155,16 @@ function SettingsPanel() {
           }),
           React.createElement(Dropdown, {
             onChange: (v) => {
-              setSetting(checked, v);
+              setSetting(checked, v === null ? getKey(checked) : v);
               forceUpdate();
               setColors();
             },
             options: colors,
-            value: savedColor
+            value: savedColor,
+            closeOnSelect: false,
+            clearable: true,
+            hideIcon: true,
+            placeholder: `Custom ${color.hex}`
           })
         ]
       })
