@@ -1,6 +1,6 @@
 /**
  * @name ChangeSwitchColor 
- * @version 1.0.1
+ * @version 1.0.2
  * @author doggybootsy
  * @description Change discords switch color to a preset or a custom color
  */
@@ -25,6 +25,8 @@ const AppColorStore = Webpack.getModule(m => m.getName?.() === "AppColorStore");
 const ColorPicker = Webpack.getModule(m => Filters.byStrings(".Messages.PICK_A_COLOR_FROM_THE_PAGE")(m.type), { searchExports: true });
 const Dropdown = Webpack.getModule(Filters.byStrings("[\"value\",\"onChange\"]"), { searchExports: true });
 const Switch = Webpack.getModule(Filters.byStrings("htmlFor:", ".Messages.LEARN_MORE"));
+// RS
+const ReactSpring = BdApi.Webpack.getModule(m => m.useSpring);
 // To replace the colors in the context
 const allColors = Object.assign({}, AppColorStore.getAllColors());
 // Color Dropdowns
@@ -102,7 +104,8 @@ function updateCSS(checked, unchecked) {
   .CSC-settings > div:last-child > div { margin-bottom: 10px }
   .CSC-settings > div:first-child { border: none; box-shadow: none; padding: 0; }
   .bd-switch input:checked+.bd-switch-body { --switch-color: ${checked.hex}; }
-  .bd-switch-body { --switch-color: ${unchecked.hex}; }`)
+  .bd-switch-body { --switch-color: ${unchecked.hex}; }
+  .csc-preview { height: 72px; border-radius: 3px; display: flex; justify-content: center; align-items: center; cursor: pointer }`)
 }
 function setColors() {
   const checked = getColor(getSetting(true));
@@ -116,17 +119,65 @@ function setColors() {
   [...listeners].map(m => m());
 }
 setColors();
-// Settings
+// Demos
 function DemoSwitch() {
   const [ checked, setChecked ] = React.useState(true);
+  const [ disabled, setDisabled ] = React.useState(false);
 
-  return React.createElement(Switch, {
-    children: "Demo Switch",
-    value: checked,
-    onChange: () => setChecked(!checked)
+  return React.createElement("div", {
+    onContextMenu: () => setDisabled(!disabled),
+    children: React.createElement(Switch, {
+      children: "Demo Switch",
+      disabled,
+      value: checked,
+      onChange: () => setChecked(!checked)
+    })
   })
 }
+function DemoLarge({ hook }) {
+  const [ disabled, setDisabled ] = React.useState(false);
+  const [ checked, setChecked ] = React.useState(false);
+  const [ heldDown, setHeldDown ] = React.useState(false);
+  
+  const color = React.useMemo(() => ({ checked: getColor(getSetting(true)), unchecked: getColor(getSetting(false)) }), [ hook ]);
 
+  const style = ReactSpring.useSpring({
+    config: {
+      mass: 1,
+      tension: 250
+    },
+    opacity: disabled ? .3 : 1,
+    state: heldDown ? checked ? .7 : .3 : checked ? 1 : 0
+  });
+
+  return React.createElement(ReactSpring.animated.div, {
+    className: "csc-preview", 
+    onMouseDown() { !disabled && setHeldDown(!0); },
+    onMouseUp() { setHeldDown(false); },
+    onMouseLeave() { setHeldDown(false); },
+    onContextMenu() { setDisabled(!disabled); },
+    onClick() { !disabled && setChecked(!checked); },
+    style: {
+      opacity: style.opacity,
+      backgroundColor: style.state.to({
+        output: [color.unchecked.hex, color.checked.hex]
+      })
+    },
+    children: React.createElement("div", {
+      children: [
+        React.createElement("div", {
+          children: `Disabled: ${disabled}`
+        }),
+        React.createElement("div", {
+          children: `Checked: ${checked}`
+        }),React.createElement("div", {
+          children: `Held Down: ${heldDown}`
+        })
+      ]
+    })
+  })
+}
+// Settings
 function SettingsPanel() {
   const [ hook, forceUpdate ] = useForceUpdate();
   const [ checked, setChecked ] = React.useState(true);
@@ -147,6 +198,7 @@ function SettingsPanel() {
       }),
       React.createElement("div", {
         children: [
+          React.createElement(DemoLarge, { hook }),
           React.createElement(DemoSwitch),
           React.createElement(Switch, {
             children: `Editing ${checked ? "Checked" : "Unchecked"} Switches`,
@@ -176,7 +228,7 @@ module.exports = class CSC {
   start() {
     // Hook a listener to allow us to forceUpdate and provide a custom context value
     Patcher.after(SwitchItemModule, SwitchItemKey, (that, [ props ], res) => {
-      useListener();
+      try { useListener(); } catch (error) { };
 
       return React.createElement(ColorDetailsContext.Provider, {
         value: { colorDetails: allColors },
