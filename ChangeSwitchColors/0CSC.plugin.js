@@ -1,6 +1,6 @@
 /**
  * @name ChangeSwitchColors
- * @version 1.0.3
+ * @version 1.0.4
  * @author doggybootsy
  * @description Change discords checked and unchecked switch colors
  */
@@ -47,16 +47,16 @@ function setSetting(checked, value) {
   Data.save(key, value);
 }
 // Color Util
-function intToHex(int) {
-  const hex = int.toString(16);
-  const filler = Array(6 - hex.length).fill("0").join("");
-  return `#${filler}${hex}`;
-};
-function hexToHsla(hex) {
+function hexToRgb(hex, state = 1) {
   hex = hex.replace(/^#/, "");
-  const r = parseInt(hex.substr(0,2), 16) / 255;
-  const g = parseInt(hex.substr(2,2), 16) / 255;
-  const b = parseInt(hex.substr(4,2), 16) / 255;
+  const r = parseInt(hex.substr(0,2), 16) / state;
+  const g = parseInt(hex.substr(2,2), 16) / state;
+  const b = parseInt(hex.substr(4,2), 16) / state;
+
+  return { r, g, b };
+}
+function hexToHsl(hex) {
+  const { r, g, b } = hexToRgb(hex, 255);
 
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -78,10 +78,38 @@ function hexToHsla(hex) {
 
   return { h: h * 360, s, l, a: 1 };
 }
+function intToHex(int) {
+  const hex = Math.floor(int).toString(16);
+  const filler = Array(6 - hex.length).fill("0").join("");
+  return `#${filler}${hex}`;
+}
+function base16ToString(int) {
+  const hex = Math.floor(int).toString(16);
+  const filler = Array(2 - hex.length).fill("0").join("");
+  return `${filler}${hex}`;
+};
+function getBetweenColor(a, b, c) {
+  const inverse = (a - b) < 0;
+  const d = c ? .7 : .3;
+
+  const min = Math.min(a, b);
+  const max = Math.max(a, b);
+  return min + Math.round((max - min) * (inverse ? 1 - d : d))
+}
+function getBetweenColorHex(hexA, hexB, checked) {
+  const rgbA = hexToRgb(hexA);
+  const rgbB = hexToRgb(hexB);
+
+  const r = getBetweenColor(rgbA.r, rgbB.r, checked);
+  const g = getBetweenColor(rgbA.g, rgbB.g, checked);
+  const b = getBetweenColor(rgbA.b, rgbB.b, checked);
+
+  return `#${base16ToString(r)}${base16ToString(g)}${base16ToString(b)}`;
+}
 function getColor(color) {
   const app = AppColorStore.getColor(color);
   if (app) return app;
-  return { hex: color, hsl: hexToHsla(color) }
+  return { hex: color, hsl: hexToHsl(color) }
 }
 // Hooks
 function useForceUpdate() {
@@ -103,10 +131,12 @@ function updateCSS(checked, unchecked) {
 
   DOM.addStyle(`.CSC-settings { display: grid; grid-template-columns: 50% 50%; } 
   .CSC-settings > div:last-child > div:not(:last-child) { margin-bottom: 10px }
-  .CSC-settings > div:first-child { border: none; box-shadow: none; padding: 0; }
+  .CSC-settings > div:first-child { border: none; box-shadow: none; padding: 0 }
+  .csc-preview { height: 62px; border-radius: 3px; display: flex; justify-content: center; align-items: center; cursor: pointer }
   .bd-switch input:checked+.bd-switch-body { --switch-color: ${checked.hex}; }
-  .bd-switch-body { --switch-color: ${unchecked.hex}; }
-  .csc-preview { height: 62px; border-radius: 3px; display: flex; justify-content: center; align-items: center; cursor: pointer }`)
+  .bd-switch input:active:checked+.bd-switch-body { --switch-color: ${getBetweenColorHex(checked.hex, unchecked.hex, true)}; }
+  .bd-switch input:active+.bd-switch-body { --switch-color: ${getBetweenColorHex(checked.hex, unchecked.hex, false)}; }
+  .bd-switch-body { --switch-color: ${unchecked.hex}; }`)
 }
 function setColors() {
   const checked = getColor(getSetting(true));
@@ -141,7 +171,7 @@ function DemoLarge({ hook }) {
   
   const color = React.useMemo(() => ({ checked: getColor(getSetting(true)), unchecked: getColor(getSetting(false)) }), [ hook ]);
 
-  const style = ReactSpring.useSpring({
+  const { state, opacity } = ReactSpring.useSpring({
     config: {
       mass: 1,
       tension: 250
@@ -158,8 +188,8 @@ function DemoLarge({ hook }) {
     onContextMenu() { setDisabled(!disabled); },
     onClick() { !disabled && setChecked(!checked); },
     style: {
-      opacity: style.opacity,
-      backgroundColor: style.state.to({
+      opacity,
+      backgroundColor: state.to({
         output: [color.unchecked.hex, color.checked.hex]
       })
     },
