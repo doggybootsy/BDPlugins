@@ -2,7 +2,7 @@
  * @name SMS Style Messages
  * @author Doggybootsy
  * @version 1.0.0
- * @description Removes inlining Attachments
+ * @description Puts your messages to the right
  */
 
 const { Patcher, DOM } = new BdApi("SMS Style Messages");
