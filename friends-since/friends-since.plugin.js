@@ -42,7 +42,7 @@ const Section = BdApi.React.lazy(() => getLazyByStrings([ ",lastSection:", ".las
 
 let classes;
 function FriendsSince({ userId, headingClassName, textClassName }) {
-  classes ??= BdApi.Webpack.getByKeys("memberSinceContainer", "discordIcon");
+  classes ??= BdApi.Webpack.getByKeys("memberSinceWrapper", "discordIcon");
 
   const since = Flux.useStateFromStores([ RelationshipStore ], () => {
     const since = RelationshipStore.getSince(userId);
