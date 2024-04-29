@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.1
+ * @version 1.0.2
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -40,7 +40,6 @@ module.exports = (meta) => {
   }
   
   const Components = BdApi.Webpack.getByKeys("Button", "Heading");
-  const Flux = BdApi.Webpack.getByKeys("useStateFromStores", "Store");
   const userProfileUtils = BdApi.Webpack.getByKeys("getCreatedAtDate");
   const RelationshipStore = BdApi.Webpack.getStore("RelationshipStore");
   
@@ -66,8 +65,7 @@ module.exports = (meta) => {
   
   function getMessage() {
     switch (I18n.getLocale()) {
-      default:
-        return "Friends Since"
+      default: return "Friends Since";
     }
   }
   
@@ -76,48 +74,63 @@ module.exports = (meta) => {
   const UserPopout = getLazyByStrings([ ",showCopiableUsername:", ",showBorder:" ], { defaultExport: false });
   const UserModal = getLazyByStrings([ ",scrollToConnections:", ".userInfoSection,userId:" ], { defaultExport: false });
   const Section = BdApi.React.lazy(() => getLazyByStrings([ ",lastSection:", ".lastSection]:" ], { defaultExport: false }));
+
+  class FriendsSince extends BdApi.React.Component {
+    constructor(props) {
+      super(props);
+
+      this.listener = this.listener.bind(this);
+      this.listener();
+    }
+
+    state = { hasError: false };
   
-  /** @type {Record<"memberSinceWrapper" | "memberSinceContainer", string>} */
-  let classes;
-  function getWrapperClassName() {
-    classes ??= BdApi.Webpack.getByKeys("memberSinceWrapper", "discordIcon");
-    classes ??= BdApi.Webpack.getByKeys("memberSinceContainer", "discordIcon");
-    if (!classes) return null;
+    /** @type {string | null} */
+    since = null;
+
+    listener() {
+      const old = this.since;
+
+      const since = RelationshipStore.getSince(this.props.userId);
   
-    return classes.memberSinceWrapper || classes.memberSinceContainer;
-  }
-  
-  /** @type {(props: { userId: string, headingClassName: string, textClassName: string }) => React.ReactNode} */
-  function FriendsSince({ userId, headingClassName, textClassName }) {
-    const wrapper = getWrapperClassName();
-    if (!wrapper) return null;
-  
-    const since = Flux.useStateFromStores([ RelationshipStore ], () => {
-      const since = RelationshipStore.getSince(userId);
-  
-      if (since && RelationshipStore.isFriend(userId)) return userProfileUtils.getCreatedAtDate(since, I18n.getLocale());
-      return null;
-    });
-  
-    if (!since) return null;
-  
-    return BdApi.React.createElement(BdApi.React.Fragment, {
-      children: [
-        BdApi.React.createElement(Components.Heading, {
-          variant: "eyebrow",
-          className: headingClassName,
-          children: getMessage()
-        }),
-        BdApi.React.createElement("div", {
-          className: wrapper,
-          children: BdApi.React.createElement(Components.Text, {
+      if (since && RelationshipStore.isFriend(this.props.userId)) this.since = userProfileUtils.getCreatedAtDate(since, I18n.getLocale());
+      else this.since = null;
+
+      if (old !== this.since) this.forceUpdate();
+    }
+
+    componentWillUnmount() {
+      RelationshipStore.addChangeListener(this.listener);
+    }
+    componentDidMount() {
+      RelationshipStore.removeChangeListener(this.listener);
+    }
+
+    componentDidCatch() {
+      this.setState({
+        hasError: true
+      });
+    }
+
+    render() {
+      if (this.state.hasError) return BdApi.React.createElement("div", {}, "React Error");
+      if (this.since === null) return null;
+
+      return BdApi.React.createElement("div", {
+        children: [
+          BdApi.React.createElement(Components.Heading, {
+            variant: "eyebrow",
+            className: this.props.headingClassName,
+            children: getMessage()
+          }),
+          BdApi.React.createElement(Components.Text, {
             variant: "text-sm/normal",
-            className: textClassName,
-            children: since
+            className: this.props.textClassName,
+            children: this.since
           })
-        })
-      ]
-    })
+        ]
+      })
+    }
   }
   
   /** @type {Record<"title" | "body", string>} */
@@ -136,21 +149,27 @@ module.exports = (meta) => {
     });
   }
   
-  const filterForPopout = BdApi.Webpack.Filters.byStrings(",guildMember:", ".title", ".body");
+  const filterForPopout = BdApi.Webpack.Filters.byStrings(",guildId:", ".title", ".body");
   async function patchPopout() {
     const signal = getSignal();
     const module = await UserPopout;
     if (signal.aborted) return;
-    
+
     BdApi.Patcher.after("friends-since", module, "default", (that, [ props ], res) => {
-      /** @type {React.ReactNode[]} */
-      const children = res?.props?.children?.[1]?.props?.children?.[2]?.props?.children;
-      if (!children) return;
-  
-      const index = children.findIndex(m => BdApi.React.isValidElement(m) && filterForPopout(m.type));
-      if (!~index) return;
-  
-      children.splice(index + 1, 0, BdApi.React.createElement(FriendsSinceSection, { userId: props.user.id }));
+      let index = -1;
+      const node = findInReactTree(res, (node) => {
+        if (!BdApi.React.isValidElement(node)) return false;
+        if (!Array.isArray(node.props.children)) return false;
+
+        index = node.props.children.findIndex((child) => BdApi.React.isValidElement(child) && filterForPopout(child.type));
+
+        if (~index) return true;
+        return false;
+      });
+
+      if (!node) return;
+
+      node.props.children.splice(index + 1, 0, BdApi.React.createElement(FriendsSinceSection, { userId: props.user.id }));
     });
   }
   
