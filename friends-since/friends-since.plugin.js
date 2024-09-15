@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.2
+ * @version 1.0.3
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -10,18 +10,6 @@
 
 /** @type {import("betterdiscord").PluginCallback} */
 module.exports = (meta) => {
-  /** @type {(name: string, data: any) => void} */
-  function log(name, data) {
-    data = [data].flat();
-  
-    console.log(
-      `%c[${meta.name}]%c: ${name}`,
-      "font-weight: bold;color: purple;",
-      "",
-      ...data
-    );
-  }
-  
   /** @type {[ (reason?: any) => void, () => AbortSignal ]} */
   const [ abort, getSignal ] = (function() {
     let controller = new AbortController();
@@ -34,47 +22,20 @@ module.exports = (meta) => {
   
     return [ abort, () => controller.signal ];
   })();
-  /** @type {<T extends any = any>(strings: string[], options?: import("betterdiscord").BaseSearchOptions) => Promise<T>} */
-  function getLazyByStrings(strings, options) {
-    return BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings(...strings), options);
-  }
-  
+
   const Components = BdApi.Webpack.getByKeys("Button", "Heading");
-  const userProfileUtils = BdApi.Webpack.getByKeys("getCreatedAtDate");
   const RelationshipStore = BdApi.Webpack.getStore("RelationshipStore");
   
   const I18n = BdApi.Webpack.getModule(m => m.Messages && Array.isArray(m._events.locale));
-  
-  /** @type {(tree: any, searchFilter: (node: any) => boolean) => any} */
-  function findInReactTree(tree, searchFilter) {
-    return BdApi.Utils.findInTree(tree, searchFilter, {
-      walkable: [ "props", "children" ]
-    })
-  }
-  /** @type {(...strings: string[]) => any} */
-  function getBySource(...strings) {
-    const filter = BdApi.Webpack.Filters.byStrings(...strings);
-  
-    for (const key in BdApi.Webpack.modules) {
-      if (Object.hasOwnProperty.call(BdApi.Webpack.modules, key)) {
-        const element = BdApi.Webpack.modules[key];
-        if (filter(element)) return BdApi.Webpack.getModule((exports, module, id) => id === key, { searchExports: false });
-      }
-    }
-  }
   
   function getMessage() {
     switch (I18n.getLocale()) {
       default: return "Friends Since";
     }
   }
-  
-  // Can these all be lazy? idk just incase
-  /** @type {Promise<{ default: (props: { user: { id: string } }) => React.ReactElement }>} */
-  const UserPopout = getLazyByStrings([ ",showCopiableUsername:", ",showBorder:" ], { defaultExport: false });
-  const UserModal = getLazyByStrings([ ",scrollToConnections:", ".userInfoSection,userId:" ], { defaultExport: false });
-  const Section = BdApi.React.lazy(() => getLazyByStrings([ ",lastSection:", ".lastSection]:" ], { defaultExport: false }));
 
+  let Section;
+  
   class FriendsSince extends BdApi.React.Component {
     constructor(props) {
       super(props);
@@ -89,14 +50,27 @@ module.exports = (meta) => {
     since = null;
 
     listener() {
-      const old = this.since;
-
-      const since = RelationshipStore.getSince(this.props.userId);
+      try {
+        const old = this.since;
   
-      if (since && RelationshipStore.isFriend(this.props.userId)) this.since = userProfileUtils.getCreatedAtDate(since, I18n.getLocale());
-      else this.since = null;
-
-      if (old !== this.since) this.forceUpdate();
+        const since = RelationshipStore.getSince(this.props.userId);
+    
+        if (since && RelationshipStore.isFriend(this.props.userId)) {
+          const date = new Date(since);
+          this.since = !(date instanceof Date) || isNaN(date.getTime()) ? null : date.toLocaleDateString(I18n.getLocale(), {
+            month: "short",
+            day: "numeric",
+            year: "numeric"
+          });
+        }
+        else this.since = null;
+  
+        if (old !== this.since) this.forceUpdate();
+      } catch (error) {
+        console.log(error);
+        
+        this.setState({ hasError: true });
+      }
     }
 
     componentWillUnmount() {
@@ -116,136 +90,115 @@ module.exports = (meta) => {
       if (this.state.hasError) return BdApi.React.createElement("div", {}, "React Error");
       if (this.since === null) return null;
 
-      return BdApi.React.createElement("div", {
+      return BdApi.React.createElement(Section, {
+        heading: getMessage(),
+        headingColor: this.props.sidePanel ? "header-primary" : undefined,
         children: [
-          BdApi.React.createElement(Components.Heading, {
-            variant: "eyebrow",
-            className: this.props.headingClassName,
-            children: getMessage()
-          }),
           BdApi.React.createElement(Components.Text, {
             variant: "text-sm/normal",
-            className: this.props.textClassName,
             children: this.since
           })
         ]
       })
     }
   }
-  
-  /** @type {Record<"title" | "body", string>} */
-  let sectionClasses;
-  /** @type {(props: { userId: string }) => React.ReactNode} */
-  function FriendsSinceSection({ userId }) {  
-    sectionClasses ??= BdApi.Webpack.getByKeys("body", "title", "clydeMoreInfo");
-    if (!sectionClasses) return null;
-  
-    return BdApi.React.createElement(Section, {
-      children: BdApi.React.createElement(FriendsSince, {
-        userId,
-        headingClassName: sectionClasses.title,
-        textClassName: sectionClasses.body
-      })
-    });
-  }
-  
-  const filterForPopout = BdApi.Webpack.Filters.byStrings(",guildId:", ".title", ".body");
-  async function patchPopout() {
-    const signal = getSignal();
-    const module = await UserPopout;
+
+  /** @type {{ Z: Function, ZP: Function, default: React.FunctionComponent<{ user: { id: string } }> }} */
+  let UserModalContent;
+  /**
+   * @param {AbortSignal} signal 
+   */
+  async function patchUserModal(signal) {
+    if (!UserModalContent) {
+      UserModalContent = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings(".Messages.CONNECTIONS,scrollIntoView"), { defaultExport: false });
+
+      if (!("default" in UserModalContent)) {
+        Object.defineProperty(UserModalContent, "default", {
+          get() {
+            return UserModalContent.Z || UserModalContent.ZP;
+          },
+          set(value) {
+            if ("Z" in UserModalContent) UserModalContent.Z = value;
+            if ("ZP" in UserModalContent) UserModalContent.ZP = value;
+          }
+        });
+      };
+    }
+
     if (signal.aborted) return;
 
-    BdApi.Patcher.after("friends-since", module, "default", (that, [ props ], res) => {
-      let index = -1;
-      const node = findInReactTree(res, (node) => {
-        if (!BdApi.React.isValidElement(node)) return false;
-        if (!Array.isArray(node.props.children)) return false;
+    BdApi.Patcher.after("friends-since", UserModalContent, "default", (instance, [ props ], res) => {
+      if (!BdApi.React.isValidElement(res)) return;
 
-        index = node.props.children.findIndex((child) => BdApi.React.isValidElement(child) && filterForPopout(child.type));
+      const children = res.props.children;
+      const index = children.findIndex((value) => BdApi.React.isValidElement(value) && "heading" in value.props && BdApi.React.isValidElement(value.props.children) && "tooltipDelay" in value.props.children.props);
 
-        if (~index) return true;
-        return false;
-      });
-
-      if (!node) return;
-
-      node.props.children.splice(index + 1, 0, BdApi.React.createElement(FriendsSinceSection, { userId: props.user.id }));
-    });
-  }
-  
-  const filterForModal = BdApi.Webpack.Filters.byStrings(".default.Messages.USER_PROFILE_MEMBER_SINCE");
-  async function patchModal() {
-    const signal = getSignal();
-    const module = await UserModal;
-    if (signal.aborted) return;
-    
-    BdApi.Patcher.after("friends-since", module, "default", (that, [ props ], res) => {
-      /** @type {React.ReactElement[]} */
-      const children = res?.props?.children?.[0]?.props?.children;
-      if (!children) return;
-  
-      const index = children.findIndex(m => BdApi.React.isValidElement(m) && filterForModal(m.type));
-      if (!~index) return;
-  
-      children.splice(
-        index + 1, 
-        0, 
-        BdApi.React.createElement(
-          FriendsSince, 
-          children[index].props
-        )
-      );
-    });
-  }
-  
-  /** @type {{ default: (props: { user: { id: string } }) => React.ReactElement }} */
-  const SidePanel = getBySource(".userProfileInnerThemedNonPremium");
-  
-  async function patchSidePanel() {
-    BdApi.Patcher.after("friends-since", SidePanel, "default", (that, [ props ], res) => {
-      /** @type {any} */
-      let tree;
-      /** @type {number} */
-      let index = -1;
-  
-      findInReactTree(res.props, (node) => {
-        if (!Array.isArray(node?.children)) return false;
+      if (~index) {
+        Section = children[index].type;        
         
-        for (const element of node.children) {
-          if (!BdApi.React.isValidElement(element)) continue;
-          if (element.type !== BdApi.React.Fragment) continue;
-  
-          const $index = element.props.children.findIndex(m => BdApi.React.isValidElement(m) && typeof m.props.userId === "string" && m.type.toString().includes(",textClassName:"));
-          if (!~$index) continue;
-  
-          tree = element;
-          index = $index;
-  
-          return true;
-        }
-  
-        return false;
-      });
-  
-      if (!tree) return;
-  
-      tree.props.children.splice(index + 1, 0, BdApi.React.createElement(FriendsSinceSection, { userId: props.user.id }));
+        children.splice(
+          index + 1, 0, 
+          BdApi.React.createElement(FriendsSince, {
+            userId: props.user.id
+          })
+        );
+      }
+    });
+  }
+
+  /** @type {{ Z: Function, ZP: Function, default: React.FunctionComponent<{ user: { id: string } }> }} */
+  let UserSidePanel;
+  /**
+   * @param {AbortSignal} signal 
+   */
+  async function patchSidePanel(signal) {
+    if (!UserSidePanel) {
+      UserSidePanel = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings(".Messages.USER_POPOUT_ABOUT_ME,headingColor"), { defaultExport: false });
+
+      if (!("default" in UserSidePanel)) {
+        Object.defineProperty(UserSidePanel, "default", {
+          get() {
+            return UserSidePanel.Z || UserSidePanel.ZP;
+          },
+          set(value) {
+            if ("Z" in UserSidePanel) UserSidePanel.Z = value;
+            if ("ZP" in UserSidePanel) UserSidePanel.ZP = value;
+          }
+        });
+      };
+    }
+
+    if (signal.aborted) return;
+
+    BdApi.Patcher.after("friends-since", UserSidePanel, "default", (instance, [ props, abc ], res) => {
+      if (!BdApi.React.isValidElement(res)) return;
+
+      const background = res.props.children.find((value) => String(value?.props?.className).includes("overlay_"));
+      if (!background) return;
+      
+      const index = background.props.children.findIndex((value) => BdApi.React.isValidElement(value) && "heading" in value.props);
+
+      if (~index) {        
+        Section = background.props.children[index].type;
+        
+        background.props.children.push(
+          // index + 1, 0, 
+          BdApi.React.createElement(FriendsSince, {
+            userId: props.user.id,
+            sidePanel: true
+          })
+        );
+      }
     });
   }
 
   return {
     start() {
-      const then = performance.now();
-  
-      patchPopout();
-      patchModal();
-      patchSidePanel();
-  
-      log("Started", [ "|", `Took ${performance.now() - then}ms to start` ]);
+      const signal = getSignal();
+      patchUserModal(signal);
+      patchSidePanel(signal);
     }, 
     stop() {
-      log("Stopped", [ ]);
-  
       abort();
       BdApi.Patcher.unpatchAll("friends-since");
     }
