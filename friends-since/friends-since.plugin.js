@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.3
+ * @version 1.0.4
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -26,10 +26,10 @@ module.exports = (meta) => {
   const Components = BdApi.Webpack.getByKeys("Button", "Heading");
   const RelationshipStore = BdApi.Webpack.getStore("RelationshipStore");
   
-  const I18n = BdApi.Webpack.getModule(m => m.Messages && Array.isArray(m._events.locale));
+  const {intl} = BdApi.Webpack.getModule(m => m.intl);
   
   function getMessage() {
-    switch (I18n.getLocale()) {
+    switch (intl.currentLocale) {
       default: return "Friends Since";
     }
   }
@@ -57,7 +57,7 @@ module.exports = (meta) => {
     
         if (since && RelationshipStore.isFriend(this.props.userId)) {
           const date = new Date(since);
-          this.since = !(date instanceof Date) || isNaN(date.getTime()) ? null : date.toLocaleDateString(I18n.getLocale(), {
+          this.since = !(date instanceof Date) || isNaN(date.getTime()) ? null : date.toLocaleDateString(intl.currentLocale, {
             month: "short",
             day: "numeric",
             year: "numeric"
@@ -110,8 +110,8 @@ module.exports = (meta) => {
    */
   async function patchUserModal(signal) {
     if (!UserModalContent) {
-      UserModalContent = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings(".Messages.CONNECTIONS,scrollIntoView"), { defaultExport: false });
-
+      UserModalContent = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings("3fe7U1"), { defaultExport: false });
+      
       if (!("default" in UserModalContent)) {
         Object.defineProperty(UserModalContent, "default", {
           get() {
@@ -128,7 +128,7 @@ module.exports = (meta) => {
     if (signal.aborted) return;
 
     BdApi.Patcher.after("friends-since", UserModalContent, "default", (instance, [ props ], res) => {
-      if (!BdApi.React.isValidElement(res)) return;
+      if (!BdApi.React.isValidElement(res)) return;      
 
       const children = res.props.children;
       const index = children.findIndex((value) => BdApi.React.isValidElement(value) && "heading" in value.props && BdApi.React.isValidElement(value.props.children) && "tooltipDelay" in value.props.children.props);
@@ -153,7 +153,7 @@ module.exports = (meta) => {
    */
   async function patchSidePanel(signal) {
     if (!UserSidePanel) {
-      UserSidePanel = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings(".Messages.USER_POPOUT_ABOUT_ME,headingColor"), { defaultExport: false });
+      UserSidePanel = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings("61W33d", "UserProfilePanelBody"), { defaultExport: false });
 
       if (!("default" in UserSidePanel)) {
         Object.defineProperty(UserSidePanel, "default", {
