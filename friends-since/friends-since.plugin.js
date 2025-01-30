@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.4
+ * @version 1.0.5
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -23,7 +23,7 @@ module.exports = (meta) => {
     return [ abort, () => controller.signal ];
   })();
 
-  const Components = BdApi.Webpack.getByKeys("Button", "Heading");
+  const Text = BdApi.Webpack.getBySource("data-text-variant", "=\"div\",selectable:", { searchExports: true });
   const RelationshipStore = BdApi.Webpack.getStore("RelationshipStore");
   
   const {intl} = BdApi.Webpack.getModule(m => m.intl);
@@ -94,7 +94,7 @@ module.exports = (meta) => {
         heading: getMessage(),
         headingColor: this.props.sidePanel ? "header-primary" : undefined,
         children: [
-          BdApi.React.createElement(Components.Text, {
+          BdApi.React.createElement(Text, {
             variant: "text-sm/normal",
             children: this.since
           })
