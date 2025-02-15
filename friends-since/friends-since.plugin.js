@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.5
+ * @version 1.0.6
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -23,7 +23,9 @@ module.exports = (meta) => {
     return [ abort, () => controller.signal ];
   })();
 
-  const Text = BdApi.Webpack.getBySource("data-text-variant", "=\"div\",selectable:", { searchExports: true });
+  let Text = BdApi.Webpack.getBySource("data-text-variant", "=\"div\",selectable:", { defaultExport: false });
+  if (!Text.render) Text = Object.values(Text)[0];
+
   const RelationshipStore = BdApi.Webpack.getStore("RelationshipStore");
   
   const {intl} = BdApi.Webpack.getModule(m => m.intl);
@@ -80,10 +82,14 @@ module.exports = (meta) => {
       RelationshipStore.removeChangeListener(this.listener);
     }
 
-    componentDidCatch() {
+    componentDidCatch() {      
       this.setState({
         hasError: true
       });
+    }
+
+    static getDerivedStateFromError(error) {
+      return { hasError: true };
     }
 
     render() {
