@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.6
+ * @version 1.0.7
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -116,7 +116,7 @@ module.exports = (meta) => {
    */
   async function patchUserModal(signal) {
     if (!UserModalContent) {
-      UserModalContent = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings("3fe7U1"), { defaultExport: false });
+      UserModalContent = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings("3fe7U1", "trackUserProfileAction"), { defaultExport: false });
       
       if (!("default" in UserModalContent)) {
         Object.defineProperty(UserModalContent, "default", {
