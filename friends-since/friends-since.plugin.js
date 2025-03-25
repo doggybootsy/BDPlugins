@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.7
+ * @version 1.0.8
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -28,7 +28,9 @@ module.exports = (meta) => {
 
   const RelationshipStore = BdApi.Webpack.getStore("RelationshipStore");
   
-  const {intl} = BdApi.Webpack.getModule(m => m.intl);
+  const {intl} = BdApi.Webpack.getMangled(".IntlManager(", {
+    intl: m => m?.currentLocale
+});
   
   function getMessage() {
     switch (intl.currentLocale) {
