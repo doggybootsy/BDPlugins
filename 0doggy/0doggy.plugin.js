@@ -1,5 +1,6 @@
 /**
  * @name Doggy
+ * @version 0.0.0
  */
 
 /**
@@ -25,6 +26,8 @@ iife.once = function(name, ...args) {
 
     doggy[name] = iife(...args);
 }
+
+window.doggy ??= {};
 
 if (BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE) {
     const ReactCurrentDispatcher = Object.values(BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE)
@@ -57,7 +60,7 @@ if (BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE)
 
 /** @type {import("betterdiscord").PluginCallback} */
 module.exports = (meta) => {
-    const { Patcher, Data, DOM, React, ReactDOM, ContextMenu } = new window.BdApi(meta.name);
+    const { Patcher, Data, DOM, React, ReactDOM, ContextMenu, UI } = new window.BdApi(meta.name);
 
     /**
      * @template {T}
@@ -1293,7 +1296,45 @@ body:not(.bd-frame) section.title_f75fb0 {
             });
         }
 
-        forceUpdateApp();
+        onStart(forceUpdateApp);
+        onStop(forceUpdateApp);
+    });
+
+    iife(() => {
+        window.doggy.killUpdater?.();
+
+        const [abort, getSignal] = Utils.createAbort();
+        window.doggy.killUpdater = () => abort();
+
+        onStart(async () => {
+            const signal = getSignal();
+
+            const request = await fetch("https://raw.githubusercontent.com/doggybootsy/BDPlugins/refs/heads/main/0doggy/0doggy.plugin.js", { signal });
+            const text = await request.text();
+
+            if (signal.aborted) ret;
+
+            const match = text.match(/@version (\d+\.\d+\.\d+)/);
+            
+            let hasUpdate = false;
+            if (!match) hasUpdate = true;
+            else hasUpdate = Utils.semverCompare(meta.version, match[1]);            
+
+            if (hasUpdate) {
+                UI.showNotification({
+                    id: "doggy::updater",
+                    title: "Update Ready",
+                    content: "0doggy.plugin.js has a update ready",
+                    type: "info",
+                    actions: [{
+                        label: "Update",
+                        onClick: () => require("fs").writeFileSync(__filename, text)
+                    }],
+                })
+            }
+        });
+
+        onStop(abort);
     });
 
     iife(() => {
@@ -1404,8 +1445,6 @@ body:not(.bd-frame) section.title_f75fb0 {
     });
 
     return (function() {
-        window.doggy ??= {};
-
         window.doggy.Storage = Storage;
 
         window.doggy.Utils = Utils;
