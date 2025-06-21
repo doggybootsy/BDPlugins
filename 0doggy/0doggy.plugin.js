@@ -914,7 +914,7 @@ module.exports = (meta) => {
             Patcher.after(module, key, (that, args, res) => {                
                 set(() => res.props.children[2]);
 
-                if (BdApi.Plugins.isEnabled("UserAffinities.plugin.js")) {
+                if (BdApi.Plugins.isEnabled("Affinities.plugin.js")) {
                     res.type = VOIDTYPE;
                     return res;
                 }
