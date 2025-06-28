@@ -1,6 +1,6 @@
 /**
  * @name Doggy
- * @version 0.0.0
+ * @version 0.0.1
  */
 
 /**
@@ -13,7 +13,8 @@ async function iife(callback, onError = console.error, onFinal) {
         const ret = callback();
         if (ret instanceof Promise) await ret;
     } catch (error) {
-        onError(error);
+        const ret = onError(error);
+        if (ret instanceof Promise) await ret;
     } finally {
         onFinal?.();
     }
@@ -30,18 +31,6 @@ iife.once = function(name, ...args) {
 window.doggy ??= {};
 
 if (BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE) {
-    const ReactCurrentDispatcher = Object.values(BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE)
-                .find(m => m?.useId);
-
-    BdApi.React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = {
-        ReactCurrentDispatcher: {
-            get current() { 
-                // console.trace("doggy polyfilled 'ReactCurrentDispatcher'"); 
-                return ReactCurrentDispatcher; 
-            } 
-        }
-    };
-
     Object.defineProperty(BdApi.ReactDOM, "findDOMNode", {
         configurable: true,
         get: () => (
@@ -60,7 +49,7 @@ if (BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE)
 
 /** @type {import("betterdiscord").PluginCallback} */
 module.exports = (meta) => {
-    const { Patcher, Data, DOM, React, ReactDOM, ContextMenu, UI } = new window.BdApi(meta.name);
+    const { Patcher, Data, DOM, React, ContextMenu, UI } = new window.BdApi(meta.name);
 
     /**
      * @template {T}
@@ -190,6 +179,7 @@ module.exports = (meta) => {
     })();
 
     const FluxDispatcher = Webpack.getByKeys("_dispatch");
+    const dispatch = (type, data = {}) => FluxDispatcher.dispatch({...data, type});
 
     const { TypingModule, UploadButton } = getBulk({
         TypingModule: {
@@ -221,7 +211,9 @@ module.exports = (meta) => {
             /** @type {Record<string, boolean>} */
             "silent-typing": {},
             /** @type {{ "show-user-header": boolean, "mini-status": boolean }} */
-            "user-action-profile": {}
+            "user-action-profile": {},
+            /** @type {{ "role-gradient": boolean }} */
+            "always-animate": {}
         };
 
         /** @type {typeof defaultSettings} */
@@ -536,9 +528,7 @@ module.exports = (meta) => {
             const listeners = new Set();
 
             function accessor(forceNoUseHook = false) {
-              const dispatcher = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher.current;
-
-              if (forceNoUseHook || !String(dispatcher.useSyncExternalStore).includes("349")) {
+              if (forceNoUseHook || !String(React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H.useSyncExternalStore).includes("349")) {
                 return currentState;
               }
 
@@ -592,8 +582,8 @@ module.exports = (meta) => {
         return {
             forceUpdateApp, findInReactTree, requestAnimationFrames,
             createState, createAbort, parents, ENodeList, iteratorFrom,
-            ...BdApi.Utils,
             ...BdApi.DOM,
+            ...BdApi.Utils,
             ...BdApi.ReactUtils
         }
     })();
@@ -641,6 +631,7 @@ module.exports = (meta) => {
 
     function Settings({ onClose }) {
         const uap = Storage.use("user-action-profile");
+        const aa = Storage.use("always-animate");
 
         return [
             h(SettingGroup, {
@@ -672,6 +663,24 @@ module.exports = (meta) => {
                     }),
                 ]
             }),
+            h(SettingGroup, {
+                name: "Always Animate",
+                collapsible: true,
+                shown: false,
+                children: [
+                    h(SettingItem, {
+                        name: "Gradient Roles",
+                        note: "Always animate holographic roles",
+                        inline: true,
+                        children: h(SwitchInput, {
+                            value: aa["role-gradient"] ?? true,
+                            onChange: (v) => {
+                                Storage.set("always-animate", Object.assign({}, aa, { "role-gradient": v }));
+                            }
+                        })
+                    })
+                ]
+            }),
             h(Button, {
                 children: access(),
                 onClick() {
@@ -685,6 +694,26 @@ module.exports = (meta) => {
         ]
     }
 
+    const LayerManager = {
+        push(component) {
+            FluxDispatcher.dispatch({
+                type: "LAYER_PUSH",
+                component
+            });
+        },
+        pop() {
+            FluxDispatcher.dispatch({
+                type: "LAYER_POP"
+            });
+        },
+        popAll() {
+            FluxDispatcher.dispatch({
+                type: "LAYER_POP_ALL"
+            });
+        }
+    };
+
+    {Utils.LayerManager = LayerManager};
 
     iife(() => {
         const silentTyping = Storage.bind("silent-typing");
@@ -822,8 +851,19 @@ module.exports = (meta) => {
 
                 original(...args);
             });
+
+            CSS.addStyle(`.doggy-silent-typing svg circle:first-child + path { color: red; }`)
         });
     });
+
+    iife(() => {
+        return;
+
+        onStart(() => {         
+               
+            Patcher.after(Webpack.getByKeys("Channel", "GuildName", { raw: true }).exports, "Z", console.log);
+        });
+    })
 
     iife(() => {
         const moment = Webpack.getModule(m => m.isMoment);
@@ -840,6 +880,99 @@ module.exports = (meta) => {
                 });
             });
         });
+    });
+
+    iife(async () => {
+        return;
+
+        let SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
+
+        if (!SettingsView) {
+            const regex = /{createPromise:\(\)=>n\.e\("\d+"\)\.then\(n\.bind\(n,\d+\)\),webpackId:\d+,name:"UserSettings"}/;
+            let object = {
+                createPromise: () => Promise.reject()
+            }
+
+            for (const key in Webpack.modules) {            
+                if (Object.prototype.hasOwnProperty.call(Webpack.modules, key)) {
+                    const match = String(Webpack.modules[key]).match(regex);
+
+                    if (match) {
+                        object = eval(`(n=>(${match[0]}))`)(Webpack.require);
+
+                        break;
+                    }
+                }
+            }
+
+            await object.createPromise();
+            
+            SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
+        }
+        
+        const getSettingSections = () => {
+            let sections = [];
+
+            SettingsView.prototype.getPredicateSections.call({
+                props: {
+                    sections: {
+                        filter: () => ({
+                            findIndex: () => 1,
+                            splice: (...args) => sections.push(args.at(-1))
+                        })
+                    }
+                }
+            });
+
+            return sections.slice(1);
+        };
+
+        function BetterDiscord() {
+            const [section, setSection] = useState(() => getSettingSections().find(m => m.section !== "CUSTOM").section);            
+
+            return h(SettingsView, {
+                sections: getSettingSections(),
+                section,
+                onSetSection: setSection,
+                onClose: LayerManager.pop,
+                theme: "light",
+                showUserSettingsSearch: true
+            });
+        }
+
+        doggy.openBetterDiscordLayer = () => {
+            LayerManager.push(() => h(BetterDiscord));
+        };
+    });
+
+    iife(() => {
+        onStart(() => {
+            CSS.addStyle(`
+                h3.${Webpack.getByKeys("membersGroup").membersGroup}:has(svg) {
+                    & ~ div:not([class]) {display: none}
+
+                    display: none;
+                }
+            `);
+        });
+    });
+
+    iife(() => {
+        // https://github.com/GooseMod/OpenAsar/blob/e88eebf440866a06f3eca3b4fe2a8cc07818ee61/src/mainWindow.js#L98
+
+        onStart(() => {
+            const post = typeof scheduler === "object" ? scheduler.postTask.bind(scheduler) : window.queueMicrotask;
+
+            Patcher.instead(Element.prototype, "removeChild", (that, args, original) => {
+                if (typeof args[0].className === "string" && (args[0].className.indexOf("activity") !== -1)) {
+                    post(() => original.apply(that, args));
+
+                    return;
+                }
+
+                return original.apply(that, args);
+            });
+        })
     });
 
     function experimentPlugin(experimentId, bucket) {
@@ -883,9 +1016,11 @@ module.exports = (meta) => {
     if (!window.console.$_doggy) {
         window.console.$_doggy = true;
 
+        const ctx = typeof console.context === "function" && console.context();
+
         window.console = new Proxy(window.console, {
-            get() {
-                let ret = Reflect.get(...arguments);
+            get(target, key) {
+                let ret = ctx?.[key] || Reflect.get(...arguments);
 
                 if (typeof ret === "function") {
                     if ("__REACT_DEVTOOLS_ORIGINAL_METHOD__" in ret) ret = ret.__REACT_DEVTOOLS_ORIGINAL_METHOD__;
@@ -914,7 +1049,11 @@ module.exports = (meta) => {
 
         const VOIDTYPE = () => {};
         onStart(() => {
-            Patcher.after(module, key, (that, args, res) => {                
+            Patcher.after(module, key, (that, [props], res) => {
+                if (props.windowKey) {
+                    return;
+                }
+                        
                 set(() => res.props.children[2]);
 
                 if (BdApi.Plugins.isEnabled("Affinities.plugin.js")) {
@@ -1086,6 +1225,10 @@ body:not(.bd-frame) section.title_f75fb0 {
                 .altText__0f481 {
                     display: none;
                 }
+
+                .welcomeCTA_f5d1e2 {
+                    display: none;
+                }
             `)
         });
     });
@@ -1170,15 +1313,30 @@ body:not(.bd-frame) section.title_f75fb0 {
     });
 
     iife(() => {
-        CSS.addStyle(`
-            :root {
-                --guildbar-avatar-size: 40px;
+        const [module, key] = Webpack.getWithKey(Filters.byStrings(".roleStyle);return(", "{roleStyle:"), {
+            target: Webpack.getBySource(".roleStyle);return(", "{roleStyle:", { searchDefault: false })
+        });
+
+        const shouldAnimate = (existing) => {
+            const alwaysAnimate = Storage.get("always-animate");
+
+            if (typeof alwaysAnimate["role-gradient"] === "boolean") {
+                if (alwaysAnimate["role-gradient"]) return true;
+                return existing;
             }
 
-            .guilds_c48ade > ul [data-direction="vertical"] {
-                padding-top: 8px;
-            }
-        `)
+            return true;
+        }
+
+        onStart(() => {
+            Patcher.before(module, key, (that, [props]) => {
+                props.animateRoleGradient = shouldAnimate(props.animateRoleGradient);
+            });
+
+            Patcher.after(Webpack.getByStrings(".zalgo]:", ".compact]:", { defaultExport: false }), "Z", (that, args, res) => {
+                res.props.value.animate = shouldAnimate(res.props.value.animate);
+            });
+        });
     });
 
     var amdRequire;(function() {
@@ -1273,6 +1431,28 @@ body:not(.bd-frame) section.title_f75fb0 {
     });
 
     iife(() => {
+        const ModuleActions = Webpack.getMangled("onCloseRequest:null!=", {
+            openModal: Filters.byStrings("onCloseRequest:null!="),
+            closeModal: Filters.byStrings(".setState", ".getState()[")
+        });
+
+        const filter = Filters.byRegex(/...(props|.{1,3}),\s*addon:\s*this,\s*install:/);
+
+        onStart(() => {
+            Patcher.instead(ModuleActions, "openModal", (that, args, original) => {
+                if (filter(args[0])) {
+                    // TODO: Make the install modal be more immersive
+                    // Maybe push a layer???
+
+                    console.log(args);
+                }
+                
+                return Reflect.apply(original, that, args);
+            });
+        });
+    });
+
+    iife(() => {
         function forceUpdateApp() {
             const appMount = document.getElementById("app-mount");
 
@@ -1284,14 +1464,10 @@ body:not(.bd-frame) section.title_f75fb0 {
                 container = container.child;
             }
 
-            const { render } = container.stateNode;
-
-            if (render.toString().includes("null")) return;
-
-            container.stateNode.render = () => null;
+            const undo = Patcher.instead(container.stateNode, "render", () => null);
 
             container.stateNode.forceUpdate(() => {
-                container.stateNode.render = render;
+                undo();
                 container.stateNode.forceUpdate();
             });
         }
@@ -1318,7 +1494,7 @@ body:not(.bd-frame) section.title_f75fb0 {
             
             let hasUpdate = false;
             if (!match) hasUpdate = true;
-            else hasUpdate = Utils.semverCompare(meta.version, match[1]);            
+            else hasUpdate = Utils.semverCompare(meta.version, match[1]);
 
             if (hasUpdate) {
                 UI.showNotification({
@@ -1335,6 +1511,21 @@ body:not(.bd-frame) section.title_f75fb0 {
         });
 
         onStop(abort);
+    });
+
+    iife(() => {
+        const MessageQueue = Webpack.getByKeys("enqueue", "logger");
+
+        onStart(() => {
+            Patcher.before(MessageQueue, "enqueue", (that, args) => {
+                if (!args[0]?.message?.content) return;                
+
+                args[0].message.content = args[0].message.content.replace(
+                    /(https?:\/\/)(x|twitter|fxtwitter)(\.com\/\w+\/status\/\d+)/gmi,
+                    "$1fxtwitter$3"
+                );
+            });
+        });
     });
 
     iife(() => {
@@ -1466,7 +1657,9 @@ body:not(.bd-frame) section.title_f75fb0 {
                     UpdatableSettings.prototype.state.Settings = Settings;
                 }
 
-                const fiber = Utils.getInternalInstance(ReactDOM.findDOMNode(this));
+                const fiber = Utils.getInternalInstance(this.ref.current);
+                
+                if (!fiber) return;
 
                 const { memoizedProps } = Utils.findInTree(fiber, (fiber) => fiber?.memoizedProps?.onClose, {
                     walkable: [ "return" ]
