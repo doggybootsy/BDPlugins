@@ -1039,6 +1039,52 @@ module.exports = (meta) => {
                 SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
             }
         }();
+
+        function createSettingsPanel(addon) {
+            if (typeof addon.css === "string") return () => [
+                h("h2", { className: "bd-settings-title" }, addon.name),
+                h("div", {
+                    children: h("pre", {
+                        children: h("code", {}, addon.css)
+                    })
+                })
+            ];
+
+            if (typeof addon.instance?.getSettingsPanel !== "function") {
+                return () => [
+                    h("h2", { className: "bd-settings-title" }, addon.name),
+                    h("div", {
+                        children: h("pre", {
+                            children: h("code", {}, addon.filename)
+                        })
+                    })
+                ];
+            }
+
+            const settingsPanel = addon.instance.getSettingsPanel();            
+
+            if (React.isValidElement(settingsPanel)) return () => [
+                h("h2", { className: "bd-settings-title" }, addon.name),
+                settingsPanel
+            ];
+            if (typeof settingsPanel === "function") return () => [
+                h("h2", { className: "bd-settings-title" }, addon.name),
+                h(settingsPanel)
+            ];
+
+            if (settingsPanel instanceof Node) {
+                const Wrapped = Utils.wrapElement(settingsPanel);
+                return () => [
+                    h("h2", { className: "bd-settings-title" }, addon.name),
+                    h(Wrapped)
+                ];
+            }
+
+            return () => [
+                h("h2", { className: "bd-settings-title" }, addon.name),
+                settingsPanel
+            ];
+        }
         
         const getSettingSections = (onSetSection = () => {}) => {
             let sections = [];
@@ -1086,49 +1132,81 @@ module.exports = (meta) => {
                     alignItems: "center",
                     gap: 4
                 },
+                onClick: e => {
+                    e.stopPropagation();
+                },
                 children: [
                     addon.filename !== "0doggy.plugin.js" && h(SwitchInput, {
                         value: isEnabled, 
                         onChange: () => {
                             manager[isEnabled ? "disable" : "enable"](addon.id);
                             setEnabled(manager.isEnabled(addon.id));
+
+                            if (isEnabled) {
+                                setSection(v => {
+                                    if (v !== addon.filename) return v;
+                                    return getSettingSections()[1].section;
+                                });
+                            }
                         },
                         internalState: false
                     }),
-                    addon.instance?.getSettingsPanel && [
-                        h("svg", {
-                            viewBox: "0 0 24 24",
-                            width: 24,
-                            height: 24,
-                            strokeLinecap: "round",
-                            strokeWidth: 2,
-                            strokeLineJoin: 2,
-                            className: "lucide lucide-settings",
-                            stroke: "currentColor",
-                            fill: "none",
-                            onClick: () => {
-                                if (manager.isEnabled(addon.id)) {
-                                    setSection(addon.filename);
-                                }
-                                else {
-                                    BdApi.UI.showToast(
-                                        `${addon.name} is not enabled!`,
-                                        { type: "warning", forceShow: true }
-                                    );
-                                }
-                            },
-                            children: [
-                                h("path", {
-                                    d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-                                }),
-                                h("circle", {
-                                    cx: 12,
-                                    cy: 12,
-                                    r: 3
-                                })
-                            ]
-                        })
-                    ]
+                    // h("svg", {
+                    //     viewBox: "0 0 24 24",
+                    //     width: 18,
+                    //     height: 18,
+                    //     strokeLinecap: "round",
+                    //     strokeWidth: 2,
+                    //     strokeLineJoin: 2,
+                    //     className: "lucide lucide-pencil",
+                    //     stroke: "currentColor",
+                    //     fill: "none",
+                    //     onClick: () => {
+                            
+                    //     },
+                    //     children: [
+                    //         h("path", {
+                    //             d: "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                    //         }),
+                    //         h("path", {
+                    //             d: "m15 5 4 4"
+                    //         })
+                    //     ]
+                    // }),
+                    // addon.instance?.getSettingsPanel && [
+                    //     h("svg", {
+                    //         viewBox: "0 0 24 24",
+                    //         width: 18,
+                    //         height: 18,
+                    //         strokeLinecap: "round",
+                    //         strokeWidth: 2,
+                    //         strokeLineJoin: 2,
+                    //         className: "lucide lucide-settings",
+                    //         stroke: "currentColor",
+                    //         fill: "none",
+                    //         onClick: () => {
+                    //             if (manager.isEnabled(addon.id)) {
+                    //                 setSection(addon.filename);
+                    //             }
+                    //             else {
+                    //                 BdApi.UI.showToast(
+                    //                     `${addon.name} is not enabled!`,
+                    //                     { type: "warning", forceShow: true }
+                    //                 );
+                    //             }
+                    //         },
+                    //         children: [
+                    //             h("path", {
+                    //                 d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+                    //             }),
+                    //             h("circle", {
+                    //                 cx: 12,
+                    //                 cy: 12,
+                    //                 r: 3
+                    //             })
+                    //         ]
+                    //     })
+                    // ],
                 ]
             })
         }
@@ -1182,6 +1260,69 @@ module.exports = (meta) => {
                 return () => clearInterval(interval);
             }, []);
 
+            const pluginSections = React.useMemo(() => {
+                const values = Object.values(plugins);
+                if (!values.length) return [];
+
+                return [
+                    { section: "DIVIDER" },
+                    { section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label },
+                    ...values.sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : b.filename === "0doggy.plugin.js" ? 1 : a.name.localeCompare(b.name)).map((plugin) => {
+                        const item = { 
+                            section: plugin.filename,
+                            label: h("div", {
+                                style: {
+                                    display: "flex",
+                                    flexDirection: "row",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                    gap: 4
+                                },
+                                children: [
+                                    plugin.name,
+                                    plugin.instance?.getSettingsPanel && h("svg", {
+                                        viewBox: "0 0 24 24",
+                                        width: 16,
+                                        height: 16,
+                                        strokeLinecap: "round",
+                                        strokeWidth: 2,
+                                        strokeLineJoin: 2,
+                                        className: "lucide lucide-settings",
+                                        stroke: "currentColor",
+                                        fill: "none",
+                                        children: [
+                                            h("path", {
+                                                d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+                                            }),
+                                            h("circle", {
+                                                cx: 12,
+                                                cy: 12,
+                                                r: 3
+                                            })
+                                        ]
+                                    })
+                                ]
+                            }),
+                            icon: h(Icon, { addon: plugin, setSection, manager: BdApi.Plugins }),
+                            element: createSettingsPanel(plugin),
+                            onClick: () => {
+                                if (BdApi.Plugins.isEnabled(plugin.id)) {
+                                    setSection(plugin.filename);
+                                }
+                                else {
+                                    BdApi.UI.showToast(
+                                        `${plugin.name} is not enabled!`,
+                                        { type: "warning", forceShow: true }
+                                    );
+                                }
+                            }
+                        };
+                        
+                        return item;
+                    })
+                ]
+            }, [plugins]);
+
             const themeSections = React.useMemo(() => {
                 const values = Object.values(themes);
                 if (!values.length) return [];
@@ -1194,15 +1335,8 @@ module.exports = (meta) => {
                             section: theme.filename,
                             label: theme.name,
                             icon: h(Icon, { addon: theme, setSection, manager: BdApi.Themes }),
-                            element: () => [
-                                h("h2", { className: "bd-settings-title" }, theme.name),
-                                h("div", {
-                                    children: h("pre", {
-                                        children: h("code", {}, theme.css)
-                                    })
-                                })
-                            ],
-                            onClick: () => {}
+                            element: createSettingsPanel(theme),
+                            // onClick: () => {}
                         };
 
                         return item;
@@ -1251,22 +1385,7 @@ module.exports = (meta) => {
                 sections: [
                     ...sections.slice(0, -2),
                     ...communitySections,
-                    { section: "DIVIDER" },
-                    { section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label },
-                    ...Object.values(plugins).sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : b.filename === "0doggy.plugin.js" ? 1 : a.name.localeCompare(b.name)).map((plugin) => {
-                        const item = { 
-                            section: plugin.filename,
-                            label: plugin.name,
-                            icon: h(Icon, { addon: plugin, setSection, manager: BdApi.Plugins }),
-                            element: () => [
-                                h("h2", { className: "bd-settings-title" }, plugin.name),
-                                plugin.instance.getSettingsPanel()
-                            ],
-                            onClick: () => {}
-                        };
-
-                        return item;
-                    }),
+                    ...pluginSections,
                     ...themeSections
                 ],
                 section,
