@@ -1,6 +1,6 @@
 /**
  * @name Doggy
- * @version 0.0.3
+ * @version 0.0.4
  */
 
 /**
@@ -1061,7 +1061,7 @@ module.exports = (meta) => {
             });
 
             return sections.slice(1);
-        };
+        }
 
         function shallowCompareArrays(arr1, arr2) {
             return arr1.length === arr2.length && arr1.every((val, index) => val === arr2[index]);
@@ -1132,9 +1132,31 @@ module.exports = (meta) => {
                 ]
             })
         }
+
+        function getBDSetting(groupKey, settingKey, reactive = false) {
+            const sections = getSettingSections();
+
+            const groups = sections[1].element().type(sections[1].element().props).props.children[1];
+
+            const group = groups.find(m => m.props.id === groupKey);
+            if (!group) return { value: null, disabled: null };
+
+            const groupRes = Utils.wrapInHooks(group.type)(group.props);
+
+            const settingItem = groupRes.props.children[0].find(m => m.props.id === settingKey);
+
+            let setting = { value: null, disabled: null };
+            if (!settingItem) return setting;
+
+            if (reactive) settingItem.type(settingItem.props);
+
+            Utils.wrapInHooks(settingItem.type, { useCallback: v => setting = v() })(settingItem.props);
+
+            return setting;
+        }
         
-        function BetterDiscord() {
-            const sections = getSettingSections((section) => setSection(section));
+        function BetterDiscord() {            
+            const sections = React.useMemo(() => getSettingSections((section) => setSection(section)));
             const [section, setSection] = useState(() => sections.at(1).section);
 
             const [plugins, setPlugins] = useState(() => {
@@ -1188,26 +1210,12 @@ module.exports = (meta) => {
                 ]
             }, [themes]);
 
-            return h(SettingsView, {
-                sections: [
-                    ...sections.slice(0, -2),
-                    { section: "DIVIDER" },
-                    { section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label },
-                    ...Object.values(plugins).sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : a.name.localeCompare(b.name)).map((plugin) => {
-                        const item = { 
-                            section: plugin.filename,
-                            label: plugin.name,
-                            icon: h(Icon, { addon: plugin, setSection, manager: BdApi.Plugins }),
-                            element: () => [
-                                h("h2", { className: "bd-settings-title" }, plugin.name),
-                                plugin.instance.getSettingsPanel()
-                            ],
-                            onClick: () => {}
-                        };
+            const isAddonStoreEnabled = getBDSetting("store", "bdAddonStore", true);
+            
+            const communitySections = React.useMemo(() => {
+                if (!isAddonStoreEnabled.value) return [];
 
-                        return item;
-                    }),
-                    ...themeSections,
+                return [
                     { section: "DIVIDER" },
                     { section: "HEADER", label: "Community" },
                     {
@@ -1235,7 +1243,31 @@ module.exports = (meta) => {
 
                             return storeResult;
                         }
-                    },
+                    }
+                ]
+            }, [isAddonStoreEnabled]);
+
+            return h(SettingsView, {
+                sections: [
+                    ...sections.slice(0, -2),
+                    ...communitySections,
+                    { section: "DIVIDER" },
+                    { section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label },
+                    ...Object.values(plugins).sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : b.filename === "0doggy.plugin.js" ? 1 : a.name.localeCompare(b.name)).map((plugin) => {
+                        const item = { 
+                            section: plugin.filename,
+                            label: plugin.name,
+                            icon: h(Icon, { addon: plugin, setSection, manager: BdApi.Plugins }),
+                            element: () => [
+                                h("h2", { className: "bd-settings-title" }, plugin.name),
+                                plugin.instance.getSettingsPanel()
+                            ],
+                            onClick: () => {}
+                        };
+
+                        return item;
+                    }),
+                    ...themeSections
                 ],
                 section,
                 onSetSection: setSection,
