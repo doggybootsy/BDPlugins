@@ -1,6 +1,6 @@
 /**
  * @name Doggy
- * @version 0.0.1
+ * @version 0.0.2
  */
 
 /**
@@ -191,7 +191,36 @@ module.exports = (meta) => {
         }
     });
 
-    const { Button, SwitchInput, SettingItem, SettingGroup } = BdApi.Components;
+    const { Button, SwitchInput, SettingItem, SettingGroup: $SettingGroup } = BdApi.Components;
+
+    /**
+     * 
+     * @param {import("betterdiscord").SettingGroupProps} props 
+     * @returns 
+     */
+    function SettingGroup(props) {
+        const groups = Storage.get("setting-group");
+
+        return h($SettingGroup, {
+            ...props,
+            shown: React.useMemo(() => {
+                if ("shown" in props) return props.shown;
+                if (!props.collapsible) return true;
+                
+                if (!props.id) return false;
+
+                return groups[props.id] ?? false;
+            }, [groups, props.shown, props.collapsible, props.id]),
+            onDrawerToggle: React.useCallback(v => {
+                if (!props.id) return;
+
+                Storage.set("setting-group", {
+                    ...groups,
+                    [props.id]: v
+                });
+            }, [groups, props.id])
+        })
+    }
 
     const h = React.createElement;
 
@@ -213,7 +242,9 @@ module.exports = (meta) => {
             /** @type {{ "show-user-header": boolean, "mini-status": boolean }} */
             "user-action-profile": {},
             /** @type {{ "role-gradient": boolean }} */
-            "always-animate": {}
+            "always-animate": {},
+            /** @type {Record<string, boolean>} */
+            "setting-group": {}
         };
 
         /** @type {typeof defaultSettings} */
@@ -629,15 +660,74 @@ module.exports = (meta) => {
 
     const [access, setter] = Utils.createState(0);
 
+    /**
+     * @template {Record<PropertyKey, any>} T
+     * @param {T} obj 
+     * @param {? boolean} nested 
+     * @returns {T}
+     */
+    function useReactiveObject(obj, nested = true) {
+        const [, forceUpdate] = React.useReducer(r => r + 1, 0);
+        
+        return React.useMemo(() => {
+            const map = new WeakMap();
+            
+            function proxy(obj) {
+                const proxied = new Proxy(obj, {
+                    get(target, prop, r) {
+                        const ret = Reflect.get(target, prop, r);
+
+                        if (!nested) {
+                            return ret;
+                        }
+
+                        if ((typeof ret === "object" && ret !== null) || typeof ret === "function") {
+                            let value = map.get(ret);
+                            if (!value) {
+                                value = proxy(ret);
+                            }
+
+                            return value;
+                        }
+
+                        return ret;
+                    },
+                    set(target, prop, newValue, r) {
+                        if (Reflect.set(target, prop, newValue, r)) {
+                            forceUpdate();
+                            return true;
+                        }
+
+                        return false;
+                    }
+                });
+
+                map.set(obj, proxied);
+                map.set(proxied, proxied);
+
+                return proxied;
+            }
+
+            return proxy(obj);
+        }, []);
+    }
+
     function Settings({ onClose }) {
         const uap = Storage.use("user-action-profile");
         const aa = Storage.use("always-animate");
 
+        const state = useReactiveObject({
+            foo: 123,
+            bar: {
+                baz: 123
+            }
+        });
+
         return [
             h(SettingGroup, {
                 name: "User Action Profile",
+                id: "user-action-profile",
                 collapsible: true,
-                shown: false,
                 children: [
                     h(SettingItem, {
                         name: "Mini Status",
@@ -665,8 +755,8 @@ module.exports = (meta) => {
             }),
             h(SettingGroup, {
                 name: "Always Animate",
+                id: "always-animate",
                 collapsible: true,
-                shown: false,
                 children: [
                     h(SettingItem, {
                         name: "Gradient Roles",
@@ -681,11 +771,47 @@ module.exports = (meta) => {
                     })
                 ]
             }),
-            h(Button, {
-                children: access(),
-                onClick() {
-                    setter(r => r + 1);
-                }
+            h(SettingGroup, {
+                name: "Experimental",
+                id: "experimental",
+                collapsible: true,
+                children: [
+                    h("div", {
+                        children: [
+                            h("div", {style: {color: "red"}}, "useReactiveObject"),
+                            h("div", {
+                                style: {
+                                    display: "flex",
+                                    flexDirection: "row-reverse",
+                                    justifyContent: "space-between"
+                                },
+                                children: [
+                                    h(Button, {
+                                        children: "+",
+                                        onClick() {
+                                            state.foo++;
+                                        }
+                                    }),
+                                    h(Button, {
+                                        children: state.foo
+                                    }),
+                                    h(Button, {
+                                        children: "-",
+                                        onClick() {
+                                            state.foo--;
+                                        }
+                                    }),
+                                ]
+                            })
+                        ]
+                    }),
+                    h(Button, {
+                        children: access(),
+                        onClick() {
+                            setter(r => r + 1);
+                        }
+                    })
+                ]
             }),
             h(Button, {
                 children: "Close",
@@ -857,6 +983,10 @@ module.exports = (meta) => {
     });
 
     iife(() => {
+        
+    });
+
+    iife(() => {
         return;
 
         onStart(() => {         
@@ -882,43 +1012,49 @@ module.exports = (meta) => {
         });
     });
 
-    iife(async () => {
-        return;
-
+    iife(() => {
         let SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
 
-        if (!SettingsView) {
-            const regex = /{createPromise:\(\)=>n\.e\("\d+"\)\.then\(n\.bind\(n,\d+\)\),webpackId:\d+,name:"UserSettings"}/;
-            let object = {
-                createPromise: () => Promise.reject()
-            }
+        !async function() {
+            if (!SettingsView) {
+                const regex = /{createPromise:\(\)=>n\.e\("\d+"\)\.then\(n\.bind\(n,\d+\)\),webpackId:\d+,name:"UserSettings"}/;
+                let object = {
+                    createPromise: () => Promise.reject()
+                }
 
-            for (const key in Webpack.modules) {            
-                if (Object.prototype.hasOwnProperty.call(Webpack.modules, key)) {
-                    const match = String(Webpack.modules[key]).match(regex);
+                for (const key in Webpack.modules) {            
+                    if (Object.prototype.hasOwnProperty.call(Webpack.modules, key)) {
+                        const match = String(Webpack.modules[key]).match(regex);
 
-                    if (match) {
-                        object = eval(`(n=>(${match[0]}))`)(Webpack.require);
+                        if (match) {
+                            object = eval(`(n=>(${match[0]}))`)(Webpack.require);
 
-                        break;
+                            break;
+                        }
                     }
                 }
-            }
 
-            await object.createPromise();
-            
-            SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
-        }
+                await object.createPromise();
+                
+                SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
+            }
+        }();
         
-        const getSettingSections = () => {
+        const getSettingSections = (onSetSection = () => {}) => {
             let sections = [];
 
             SettingsView.prototype.getPredicateSections.call({
+                _reactInternals: {
+                    onSetSection
+                },
                 props: {
                     sections: {
                         filter: () => ({
                             findIndex: () => 1,
-                            splice: (...args) => sections.push(args.at(-1))
+                            splice: (...args) => {
+                                const section = args.at(-1);
+                                sections.push(section);
+                            }
                         })
                     }
                 }
@@ -928,21 +1064,120 @@ module.exports = (meta) => {
         };
 
         function BetterDiscord() {
-            const [section, setSection] = useState(() => getSettingSections().find(m => m.section !== "CUSTOM").section);            
+            const [section, setSection] = useState(() => getSettingSections().find(m => m.section !== "CUSTOM").section);                        
 
             return h(SettingsView, {
-                sections: getSettingSections(),
+                sections: getSettingSections(setSection),
                 section,
                 onSetSection: setSection,
                 onClose: LayerManager.pop,
-                theme: "light",
-                showUserSettingsSearch: true
+                title: "BetterDiscord"
             });
         }
 
         doggy.openBetterDiscordLayer = () => {
             LayerManager.push(() => h(BetterDiscord));
         };
+
+        let id;
+        const scrollers = BdApi.Webpack.getModule((e, m) => {
+            if (BdApi.Webpack.modules[m.id].toString().includes(".customTheme)")) {
+                return id = m.id;
+            }
+        });
+        const AdvancedScrollerNone = scrollers[BdApi.Webpack.modules[id].toString().match(/,(.{1,3}):\(\)=>(.{1,3}),.+?\2=\(0,.{1,3}\..{1,3}\)\((.{1,3})\.none,\3\.fade,\3\.customTheme\)/)[1]];
+
+        const topSectionFilter = Filters.byStrings(".isCurrentUserGuest(");
+        const dmsFilter = Filters.byStrings(".getPrivateChannelsVersion()");
+
+        function DashboardButton() {
+            return h("div", {
+                id: "betterdiscord-dashboard",
+                children: h("button", {
+                    onClick: doggy.openBetterDiscordLayer,
+                    children: h("svg", {
+                        viewBox: "0 0 2000 2000",
+                        width: 20,
+                        height: 20,
+                        children: [
+                            h("path", {
+                                fill: "currentColor",
+                                d: "M1402.2,631.7c-9.7-353.4-286.2-496-642.6-496H68.4v714.1l442,398V490.7h257c274.5,0,274.5,344.9,0,344.9H597.6v329.5h169.8c274.5,0,274.5,344.8,0,344.8h-699v354.9h691.2c356.3,0,632.8-142.6,642.6-496c0-162.6-44.5-284.1-122.9-368.6C1357.7,915.8,1402.2,794.3,1402.2,631.7z"
+                            }),
+                            h("path", {
+                                fill: "currentColor",
+                                d: "M1262.5,135.2L1262.5,135.2l-76.8,0c26.6,13.3,51.7,28.1,75,44.3c70.7,49.1,126.1,111.5,164.6,185.3c39.9,76.6,61.5,165.6,64.3,264.6l0,1.2v1.2c0,141.1,0,596.1,0,737.1v1.2l0,1.2c-2.7,99-24.3,188-64.3,264.6c-38.5,73.8-93.8,136.2-164.6,185.3c-22.6,15.7-46.9,30.1-72.6,43.1h72.5c346.2,1.9,671-171.2,671-567.9V716.7C1933.5,312.2,1608.7,135.2,1262.5,135.2z"
+                            }),
+                        ]
+                    })
+                })
+            });
+        }
+
+        const map = new WeakMap();
+
+        onStart(() => {
+            CSS.addStyle(`
+                #betterdiscord-dashboard {
+                    width: 100%;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                #betterdiscord-dashboard button {
+                    display: flex;
+                    background-color: var(--background-mod-subtle);
+                    color: var(--text-default);
+                    transition: scale .15s ease-out, background-color .15s ease-out, color .15s ease-out;
+                    align-items: center;
+                    display: flex;
+                    justify-content: center;
+                    width: var(--guildbar-avatar-size);
+                    padding: 5px;
+                    border-radius: 8px;
+                }
+                #betterdiscord-dashboard button:hover {
+                    background-color: var(--bg-brand);
+                    color: var(--white);
+                }
+            `);
+
+            Patcher.before(AdvancedScrollerNone, "render", (that, [props]) => {
+                const index = props.children.findIndex((child) => React.isValidElement(child) ? topSectionFilter(child.type) : false);
+
+                if (~index) {
+                    let newType = map.get(props.children[index].type);
+                    if (!newType) {
+                        const type = props.children[index].type;
+
+                        newType = (props) => {
+                            const result = type(props);
+
+                            const index = result.props.children.findIndex(m => dmsFilter(m?.type));
+                            
+                            if (~index) {
+                                result.props.children.splice(index, 0, h(DashboardButton));
+                            }
+                            else {
+                                result.props.children.unshift(index, 0, h(DashboardButton));
+                            }
+
+                            return result;
+                        }
+                        
+                        map.set(type, newType);
+                        map.set(newType, newType);
+                    }
+                    
+                    props.children[index].type = newType;
+                }
+                else {
+                    // Fallback
+                    props.children.unshift(h(DashboardButton));
+                }
+            });
+        });
     });
 
     iife(() => {
@@ -1494,7 +1729,7 @@ body:not(.bd-frame) section.title_f75fb0 {
             
             let hasUpdate = false;
             if (!match) hasUpdate = true;
-            else hasUpdate = Utils.semverCompare(meta.version, match[1]);
+            else hasUpdate = Utils.semverCompare(meta.version, match[1]) === 1;
 
             if (hasUpdate) {
                 UI.showNotification({
