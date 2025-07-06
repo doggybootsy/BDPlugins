@@ -1,6 +1,6 @@
 /**
  * @name Doggy
- * @version 0.0.4
+ * @version 0.0.5
  */
 
 /**
@@ -50,6 +50,49 @@ if (BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE)
 /** @type {import("betterdiscord").PluginCallback} */
 module.exports = (meta) => {
     const { Patcher, Data, DOM, React, ContextMenu, UI } = new window.BdApi(meta.name);
+
+    /**
+     * @template {React.ComponentType} T
+     * @param {T} defaultComponent 
+     * @param {string} id 
+     * @returns {React.ComponentClass<React.PropsWithChildren<T>> & { update(component: T): void; }}
+     */
+    function createUpdatableComponent(defaultComponent, id = defaultComponent.name) {
+        if (id in (doggy.__updatableComponent ??= {})) {
+            doggy.__updatableComponent[id].update(defaultComponent);
+
+            return doggy.__updatableComponent[id];
+        }
+
+        class Updatable extends React.Component {
+            static _instances = new Set();
+            static update(component) {
+                Updatable.prototype.state.component = component;
+
+                for (const instance of Updatable._instances) {
+                    instance.setState({ component });
+                }
+            }
+
+            componentDidMount() {
+                Updatable._instances.add(this);
+            }
+
+            componentWillUnmount() {
+                Updatable._instances.delete(this);
+            }
+
+            render() {
+                return h(this.state.component, this.props);
+            }
+        }
+
+        Updatable.prototype.state = {
+            component: defaultComponent
+        };
+
+        return doggy.__updatableComponent[id] = Updatable;
+    }
 
     /**
      * @template {T}
@@ -151,18 +194,61 @@ module.exports = (meta) => {
         }
     })();
 
+    const layerContext = doggy.__layerContext ??= React.createContext(null);
+
     (function() {
         const jsx = Webpack.getModule(m => m.jsx && m.jsxs);
-        const React = Webpack.getModule(m => m.createElement);
 
-        const components = new Set();
+        const addoncardFilter = Filters.byStrings(".showAddonSettingsModal(");
         
-        const seen = new WeakSet();
+        const sym = Symbol.for("react.context");
+
+        const matches = doggy.__reactPatches = new WeakMap();
         function patch(instance, [type, props], node) {
             if (!["object", "function"].includes(typeof type)) return;
 
-            if (seen.has(type)) return node;
-            seen.add(type);
+            if (type.$$typeof === sym) return;
+            
+            let newType = matches.get(type);
+            if (!matches.has(type)) {
+                if (addoncardFilter(type)) {
+                    const newAddonCard = (props) => {
+                        const layer = React.useContext(layerContext);                        
+
+                        const ret = type(props);
+
+                        if (!layer) return ret;
+
+                        const controls = Utils.findInReactTree(ret, m => m?.className === "bd-controls");
+
+                        if (controls?.children[0]) {
+                            const children = controls.children[0].props.children;
+
+                            controls.children[0] = React.cloneElement(controls.children[0], {
+                                children: function() {
+                                    const ret = children.apply(this, arguments);
+
+                                    ret.props.onClick = () => {
+                                        layer.onSetSection(props.addon.filename);
+                                    }
+
+                                    return ret;
+                                }
+                            });
+                        }
+
+                        return ret;
+                    };
+
+                    matches.set(type, newAddonCard);
+                }
+                else {
+                    newType = type;
+                    matches.set(type, type);
+                }
+            }
+
+            node.type = newType || type;
 
             return node;
         }
@@ -171,10 +257,6 @@ module.exports = (meta) => {
             Patcher.after(jsx, "jsx", patch);
             Patcher.after(jsx, "jsxs", patch);
             Patcher.after(React, "createElement", patch);
-        });
-
-        onStop(() => {
-            components.clear();
         });
     })();
 
@@ -191,7 +273,7 @@ module.exports = (meta) => {
         }
     });
 
-    const { Button, SwitchInput, SettingItem, SettingGroup: $SettingGroup } = BdApi.Components;
+    const { Button, SwitchInput, SettingItem, SettingGroup: $SettingGroup, ErrorBoundary } = BdApi.Components;
 
     /**
      * 
@@ -234,6 +316,20 @@ module.exports = (meta) => {
 
     /** @type {import("buffer")["Buffer"]} */
     const Buffer = Webpack.getByKeys("TYPED_ARRAY_SUPPORT", { searchExports: true });
+
+    let Router, RouterContext;(function() {
+        const key = Object.keys(appMount()).find(m => m.startsWith("__reactContainer$"));
+        const root = appMount()[key];
+
+        let container = root.child;
+
+        while (!container.stateNode?.props?.history) {
+            container = container.child;
+        }
+
+        Router = container.stateNode.props.history;
+        RouterContext = container.child.type;
+   })();   
 
     const Storage = (function() {
         const defaultSettings = {
@@ -366,6 +462,7 @@ module.exports = (meta) => {
                 settings = Object.assign(v, defaultSettings);
                 proxy = constructProxy();
             },
+            useReactiveProxy: () => useReactiveObject(proxy),
             get, set, delete: deleteP, use, clear, bind
         }
     })();
@@ -505,23 +602,31 @@ module.exports = (meta) => {
         }
 
         function forceUpdateApp() {
-            const key = Object.keys(appMount()).find(m => m.startsWith("__reactContainer$"));
-            const root = appMount()[key];
+            const reactContainerKey = Object.keys(appMount()).find(m => m.startsWith("__reactContainer$"));
 
-            let container = root.child;
+            let container = appMount()[reactContainerKey];
+
+            while (!container.stateNode?.isReactComponent) {
+                container = container.child;
+            }
+            
+            container = container.child;
 
             while (!container.stateNode?.isReactComponent) {
                 container = container.child;
             }
 
-            const component = container.stateNode;
-            const { render } = component;
+            container = container.child;
 
-            component.render = () => null;
+            while (!container.stateNode?.isReactComponent) {
+                container = container.child;
+            }
 
-            component.forceUpdate(() => {
-                component.render = render;
-                component.forceUpdate();
+            const undo = Patcher.instead(container.stateNode, "render", () => null);
+
+            container.stateNode.forceUpdate(() => {
+                undo();
+                container.stateNode.forceUpdate();
             });
         }
 
@@ -1040,50 +1145,46 @@ module.exports = (meta) => {
             }
         }();
 
+        /**
+         * 
+         * @param {any} addon 
+         * @returns {React.FunctionComponent}
+         */
         function createSettingsPanel(addon) {
-            if (typeof addon.css === "string") return () => [
+            const c = (node) => () => [
                 h("h2", { className: "bd-settings-title" }, addon.name),
-                h("div", {
-                    children: h("pre", {
-                        children: h("code", {}, addon.css)
-                    })
-                })
+                h(ErrorBoundary, null, node)
             ];
 
+            if (typeof addon.css === "string") return c(h("div", {
+                children: h("pre", {
+                    children: h("code", {}, addon.css)
+                })
+            }));
+
             if (typeof addon.instance?.getSettingsPanel !== "function") {
-                return () => [
-                    h("h2", { className: "bd-settings-title" }, addon.name),
-                    h("div", {
-                        children: h("pre", {
-                            children: h("code", {}, addon.filename)
-                        })
+                return c(h("div", {
+                    children: h("pre", {
+                        children: h("code", {}, addon.filename)
                     })
-                ];
+                }));
             }
 
             const settingsPanel = addon.instance.getSettingsPanel();            
 
-            if (React.isValidElement(settingsPanel)) return () => [
-                h("h2", { className: "bd-settings-title" }, addon.name),
-                settingsPanel
-            ];
-            if (typeof settingsPanel === "function") return () => [
-                h("h2", { className: "bd-settings-title" }, addon.name),
-                h(settingsPanel)
-            ];
+            if (React.isValidElement(settingsPanel)) return c(settingsPanel);
+            if (typeof settingsPanel === "function") return c(h(settingsPanel));
 
             if (settingsPanel instanceof Node) {
                 const Wrapped = Utils.wrapElement(settingsPanel);
-                return () => [
-                    h("h2", { className: "bd-settings-title" }, addon.name),
-                    h(Wrapped)
-                ];
+                return c(h(Wrapped));
             }
 
-            return () => [
-                h("h2", { className: "bd-settings-title" }, addon.name),
-                settingsPanel
-            ];
+            if (typeof settingsPanel === "string") {
+                return v(h("div", { dangerouslySetInnerHTML: { __html: settingsPanel } }));
+            }
+
+            return c(settingsPanel);
         }
         
         const getSettingSections = (onSetSection = () => {}) => {
@@ -1233,7 +1334,7 @@ module.exports = (meta) => {
             return setting;
         }
         
-        function BetterDiscord() {            
+        function BetterDiscord() {                        
             const sections = React.useMemo(() => getSettingSections((section) => setSection(section)));
             const [section, setSection] = useState(() => sections.at(1).section);
 
@@ -1267,43 +1368,10 @@ module.exports = (meta) => {
                 return [
                     { section: "DIVIDER" },
                     { section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label },
-                    ...values.sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : b.filename === "0doggy.plugin.js" ? 1 : a.name.localeCompare(b.name)).map((plugin) => {
+                    ...values.sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : b.filename === "0doggy.plugin.js" ? 1 : a.name.localeCompare(b.name)).filter(m => typeof m.instance?.getSettingsPanel === "function").map((plugin) => {
                         const item = { 
                             section: plugin.filename,
-                            label: h("div", {
-                                style: {
-                                    display: "flex",
-                                    flexDirection: "row",
-                                    justifyContent: "center",
-                                    alignItems: "center",
-                                    gap: 4
-                                },
-                                children: [
-                                    plugin.name,
-                                    plugin.instance?.getSettingsPanel && h("svg", {
-                                        viewBox: "0 0 24 24",
-                                        width: 16,
-                                        height: 16,
-                                        strokeLinecap: "round",
-                                        strokeWidth: 2,
-                                        strokeLineJoin: 2,
-                                        className: "lucide lucide-settings",
-                                        stroke: "currentColor",
-                                        fill: "none",
-                                        children: [
-                                            h("path", {
-                                                d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-                                            }),
-                                            h("circle", {
-                                                cx: 12,
-                                                cy: 12,
-                                                r: 3
-                                            })
-                                        ]
-                                    })
-                                ]
-                            }),
-                            icon: h(Icon, { addon: plugin, setSection, manager: BdApi.Plugins }),
+                            label: plugin.name,
                             element: createSettingsPanel(plugin),
                             onClick: () => {
                                 if (BdApi.Plugins.isEnabled(plugin.id)) {
@@ -1324,6 +1392,8 @@ module.exports = (meta) => {
             }, [plugins]);
 
             const themeSections = React.useMemo(() => {
+                return [];
+
                 const values = Object.values(themes);
                 if (!values.length) return [];
 
@@ -1381,34 +1451,74 @@ module.exports = (meta) => {
                 ]
             }, [isAddonStoreEnabled]);
 
-            return h(SettingsView, {
-                sections: [
-                    ...sections.slice(0, -2),
-                    ...communitySections,
-                    ...pluginSections,
-                    ...themeSections
-                ],
-                section,
-                onSetSection: setSection,
-                onClose: LayerManager.pop,
-                title: "BetterDiscord"
+            const pluginSection = React.useMemo(() => {
+                return {
+                    section: "bd-plugins",
+                    label: sections[4].label,
+                    element: () => {
+                        const panel = sections[4].element();
+
+                        const res = Utils.wrapInHooks(panel.props.children.type, {
+                            useState: () => [false, () => false]
+                        })(panel.props.children.props);
+
+                        return res;
+                    }
+                }
+            });
+            const themeSection = React.useMemo(() => {
+                return {
+                    section: "bd-themes",
+                    label: sections[5].label,
+                    element: () => {
+                        const panel = sections[5].element();
+
+                        const res = Utils.wrapInHooks(panel.props.children.type, {
+                            useState: () => [false, () => false]
+                        })(panel.props.children.props);
+
+                        return res;
+                    }
+                }
+            });
+
+            return h(layerContext.Provider, {
+                value: {
+                    onSetSection: setSection,
+                },
+                children: h(SettingsView, {
+                    sections: [
+                        ...sections.slice(0, -2),
+                        pluginSection,
+                        themeSection,
+                        ...communitySections,
+                        ...pluginSections,
+                        ...themeSections
+                    ],
+                    section,
+                    onSetSection: setSection,
+                    onClose: LayerManager.pop,
+                    title: "BetterDiscord"
+                })
             });
         }
+        
+        const BetterDiscordComponent = createUpdatableComponent(BetterDiscord, "BetterDiscord");
 
         doggy.openBetterDiscordLayer = () => {
-            LayerManager.push(() => h(BetterDiscord));
+            LayerManager.push(() => h(BetterDiscordComponent));
         };
 
-        let id;
-        const scrollers = BdApi.Webpack.getModule((e, m) => {
-            if (BdApi.Webpack.modules[m.id].toString().includes(".customTheme)")) {
-                return id = m.id;
-            }
-        });
-        const AdvancedScrollerNone = scrollers[BdApi.Webpack.modules[id].toString().match(/,(.{1,3}):\(\)=>(.{1,3}),.+?\2=\(0,.{1,3}\..{1,3}\)\((.{1,3})\.none,\3\.fade,\3\.customTheme\)/)[1]];
+        // let id;
+        // const scrollers = BdApi.Webpack.getModule((e, m) => {
+        //     if (BdApi.Webpack.modules[m.id].toString().includes(".customTheme)")) {
+        //         return id = m.id;
+        //     }
+        // });
+        // const AdvancedScrollerNone = scrollers[BdApi.Webpack.modules[id].toString().match(/,(.{1,3}):\(\)=>(.{1,3}),.+?\2=\(0,.{1,3}\..{1,3}\)\((.{1,3})\.none,\3\.fade,\3\.customTheme\)/)[1]];
 
-        const topSectionFilter = Filters.byStrings(".isCurrentUserGuest(");
-        const dmsFilter = Filters.byStrings(".getPrivateChannelsVersion()");
+        // const topSectionFilter = Filters.byStrings(".isCurrentUserGuest(");
+        // const dmsFilter = Filters.byStrings(".getPrivateChannelsVersion()");
 
         function DashboardButton() {
             return h("div", {
@@ -1433,6 +1543,9 @@ module.exports = (meta) => {
                 })
             });
         }
+
+        const userAvatarSection = Webpack.getByPrototypeKeys("renderAvatarWithPopout", "isCopiedStreakGodlike", { searchExports: true });
+        const PanelButton = Webpack.getBySource(".plateMuted]", ".orangeGlow]").Z;
 
         const map = new WeakMap();
 
@@ -1472,42 +1585,134 @@ module.exports = (meta) => {
                 :is(#bd-plugin-store-tab, #bd-theme-store-tab) .bd-addon-title > :not(span) {
                     display: none;
                 }
+
+                :is(#bd-plugins-tab, #bd-themes-tab) .bd-store-card {
+                    display: none;
+                }
+                :is(#bd-plugins-tab, #bd-themes-tab) .bd-store-card + div {
+                    margin-top: 10px;
+                }
+
+                .bd-animated-logo svg :first-child {
+                    animation: bd-spinner-small 1s cubic-bezier(.4, 0, 0, 1) -.05s 1;
+                }
+                .bd-animated-logo svg :last-child {
+                    animation: bd-spinner-small 1s ease 1;
+                }
+
+                @keyframes bd-spinner-small {
+                    0% {
+                        transform: scale(1) rotate(0.01deg);
+                    }
+
+                    20% {
+                        transform: scale(1.1) rotate(0.01deg);
+                    }
+
+                    40% {
+                        transform: scale(0.9) rotate(0.01deg);
+                    }
+
+                    100% {
+                        transform: scale(1) rotate(0.01deg);
+                    }
+                }
             `);
 
-            Patcher.before(AdvancedScrollerNone, "render", (that, [props]) => {
-                const index = props.children.findIndex((child) => React.isValidElement(child) ? topSectionFilter(child.type) : false);
 
-                if (~index) {
-                    let newType = map.get(props.children[index].type);
-                    if (!newType) {
-                        const type = props.children[index].type;
+            function BetterDiscordButton() {
+                const [isHovering, setHovering] = useState(false);
 
-                        newType = (props) => {
-                            const result = type(props);
+                return h(PanelButton, {
+                    tooltipText: "BetterDiscord",
+                    onClick: doggy.openBetterDiscordLayer,
+                    onMouseEnter: m => setHovering(true),
+                    onMouseLeave: m => setHovering(false),
+                    className: isHovering && "bd-animated-logo",
+                    icon: h("svg", {
+                        viewBox: "0 0 2000 2000",
+                        width: 20,
+                        height: 20,
+                        children: [
+                            h("path", {
+                                fill: "currentColor",
+                                d: "M1402.2,631.7c-9.7-353.4-286.2-496-642.6-496H68.4v714.1l442,398V490.7h257c274.5,0,274.5,344.9,0,344.9H597.6v329.5h169.8c274.5,0,274.5,344.8,0,344.8h-699v354.9h691.2c356.3,0,632.8-142.6,642.6-496c0-162.6-44.5-284.1-122.9-368.6C1357.7,915.8,1402.2,794.3,1402.2,631.7z"
+                            }),
+                            h("path", {
+                                fill: "currentColor",
+                                d: "M1262.5,135.2L1262.5,135.2l-76.8,0c26.6,13.3,51.7,28.1,75,44.3c70.7,49.1,126.1,111.5,164.6,185.3c39.9,76.6,61.5,165.6,64.3,264.6l0,1.2v1.2c0,141.1,0,596.1,0,737.1v1.2l0,1.2c-2.7,99-24.3,188-64.3,264.6c-38.5,73.8-93.8,136.2-164.6,185.3c-22.6,15.7-46.9,30.1-72.6,43.1h72.5c346.2,1.9,671-171.2,671-567.9V716.7C1933.5,312.2,1608.7,135.2,1262.5,135.2z"
+                            }),
+                        ]
+                    })
+                });
+            }
 
-                            const index = result.props.children.findIndex(m => dmsFilter(m?.type));
-                            
-                            if (~index) {
-                                result.props.children.splice(index, 0, h(DashboardButton));
+            Patcher.after(userAvatarSection.prototype, "render", (that, args, res) => {
+                return React.cloneElement(res, {
+                    children: (props) => {
+                        const ret = res.props.children(props);
+
+                        const controls = Utils.findInReactTree(ret, m => m?.props?.handleOpenAccountSettings);
+
+                        if (!controls) return ret;
+
+                        let newType = map.get(controls.type);
+                        if (!newType) {
+                            const { type } = controls;
+
+                            function Controls(props) {
+                                const result = type(props);
+
+                                result.props.children.unshift(h(BetterDiscordButton));
+
+                                return result;
                             }
-                            else {
-                                result.props.children.unshift(index, 0, h(DashboardButton));
-                            }
 
-                            return result;
+                            map.set(type, Controls);
+                            map.set(Controls, Controls);
                         }
-                        
-                        map.set(type, newType);
-                        map.set(newType, newType);
+
+                        controls.type = newType;
+
+                        return ret;
                     }
-                    
-                    props.children[index].type = newType;
-                }
-                else {
-                    // Fallback
-                    props.children.unshift(h(DashboardButton));
-                }
+                });
             });
+
+            // Patcher.before(AdvancedScrollerNone, "render", (that, [props]) => {
+            //     const index = props.children.findIndex((child) => React.isValidElement(child) ? topSectionFilter(child.type) : false);
+
+            //     if (~index) {
+            //         let newType = map.get(props.children[index].type);
+            //         if (!newType) {
+            //             const type = props.children[index].type;
+
+            //             newType = (props) => {
+            //                 const result = type(props);
+
+            //                 const index = result.props.children.findIndex(m => dmsFilter(m?.type));
+                            
+            //                 if (~index) {
+            //                     result.props.children.splice(index, 0, h(DashboardButton));
+            //                 }
+            //                 else {
+            //                     result.props.children.unshift(index, 0, h(DashboardButton));
+            //                 }
+
+            //                 return result;
+            //             }
+                        
+            //             map.set(type, newType);
+            //             map.set(newType, newType);
+            //         }
+                    
+            //         props.children[index].type = newType;
+            //     }
+            //     else {
+            //         // Fallback
+            //         props.children.unshift(h(DashboardButton));
+            //     }
+            // });
         });
     });
 
@@ -2019,27 +2224,8 @@ body:not(.bd-frame) section.title_f75fb0 {
     });
 
     iife(() => {
-        function forceUpdateApp() {
-            const appMount = document.getElementById("app-mount");
-
-            const reactContainerKey = Object.keys(appMount).find(m => m.startsWith("__reactContainer$"));
-
-            let container = appMount[reactContainerKey];
-
-            while (!container.stateNode?.isReactComponent) {
-                container = container.child;
-            }
-
-            const undo = Patcher.instead(container.stateNode, "render", () => null);
-
-            container.stateNode.forceUpdate(() => {
-                undo();
-                container.stateNode.forceUpdate();
-            });
-        }
-
-        onStart(forceUpdateApp);
-        onStop(forceUpdateApp);
+        onStart(Utils.forceUpdateApp);
+        onStop(Utils.forceUpdateApp);
     });
 
     iife(() => {
@@ -2048,32 +2234,38 @@ body:not(.bd-frame) section.title_f75fb0 {
         const [abort, getSignal] = Utils.createAbort();
         window.doggy.killUpdater = () => abort();
 
-        onStart(async () => {
-            const signal = getSignal();
+        onStart(() => {
+            async function fetchUpdate() {
+                const signal = getSignal();
 
-            const request = await fetch("https://raw.githubusercontent.com/doggybootsy/BDPlugins/refs/heads/main/0doggy/0doggy.plugin.js", { signal });
-            const text = await request.text();
+                const request = await fetch("https://raw.githubusercontent.com/doggybootsy/BDPlugins/refs/heads/main/0doggy/0doggy.plugin.js", { signal });
+                const text = await request.text();
 
-            if (signal.aborted) ret;
+                if (signal.aborted) ret;
 
-            const match = text.match(/@version (\d+\.\d+\.\d+)/);
-            
-            let hasUpdate = false;
-            if (!match) hasUpdate = true;
-            else hasUpdate = Utils.semverCompare(meta.version, match[1]) === 1;
+                const match = text.match(/@version\s+(\d+\.\d+\.\d+)/);
+                
+                let hasUpdate = false;
+                if (!match) hasUpdate = true;
+                else hasUpdate = Utils.semverCompare(meta.version, match[1]) === 1;
 
-            if (hasUpdate) {
-                UI.showNotification({
-                    id: "doggy::updater",
-                    title: "Update Ready",
-                    content: "0doggy.plugin.js has a update ready",
-                    type: "info",
-                    actions: [{
-                        label: "Update",
-                        onClick: () => require("fs").writeFileSync(__filename, text)
-                    }],
-                })
+                if (hasUpdate) {
+                    UI.showNotification({
+                        id: "doggy::updater",
+                        title: "Update Ready",
+                        content: "0doggy.plugin.js has a update ready",
+                        type: "info",
+                        actions: [{
+                            label: "Update",
+                            onClick: () => require("fs").writeFileSync(__filename, text)
+                        }],
+                    })
+                }
             }
+
+            const interval = setInterval(() => fetchUpdate(), 1000 * 60 * 60);
+
+            onStop(() => clearInterval(interval));
         });
 
         onStop(abort);
