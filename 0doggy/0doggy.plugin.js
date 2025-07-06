@@ -1,6 +1,6 @@
 /**
  * @name Doggy
- * @version 0.0.2
+ * @version 0.0.3
  */
 
 /**
@@ -215,7 +215,7 @@ module.exports = (meta) => {
                 if (!props.id) return;
 
                 Storage.set("setting-group", {
-                    ...groups,
+                    ...Storage.get("setting-group"),
                     [props.id]: v
                 });
             }, [groups, props.id])
@@ -662,7 +662,7 @@ module.exports = (meta) => {
 
     /**
      * @template {Record<PropertyKey, any>} T
-     * @param {T} obj 
+     * @param {T | (() => T)} obj 
      * @param {? boolean} nested 
      * @returns {T}
      */
@@ -708,7 +708,7 @@ module.exports = (meta) => {
                 return proxied;
             }
 
-            return proxy(obj);
+            return proxy(typeof obj === "function" ? obj() : obj);
         }, []);
     }
 
@@ -1063,11 +1063,180 @@ module.exports = (meta) => {
             return sections.slice(1);
         };
 
+        function shallowCompareArrays(arr1, arr2) {
+            return arr1.length === arr2.length && arr1.every((val, index) => val === arr2[index]);
+        }
+
+        function Icon({addon, setSection, manager}) {
+            const [ isEnabled, setEnabled ] = useState(() => manager.isEnabled(addon.id));
+
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    setEnabled(manager.isEnabled(addon.id));
+                }, 50);
+
+                return () => clearInterval(interval);
+            });
+
+            return h("div", {
+                style: {
+                    display: "flex",
+                    flexDirection: "row-reverse",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: 4
+                },
+                children: [
+                    addon.filename !== "0doggy.plugin.js" && h(SwitchInput, {
+                        value: isEnabled, 
+                        onChange: () => {
+                            manager[isEnabled ? "disable" : "enable"](addon.id);
+                            setEnabled(manager.isEnabled(addon.id));
+                        },
+                        internalState: false
+                    }),
+                    addon.instance?.getSettingsPanel && [
+                        h("svg", {
+                            viewBox: "0 0 24 24",
+                            width: 24,
+                            height: 24,
+                            strokeLinecap: "round",
+                            strokeWidth: 2,
+                            strokeLineJoin: 2,
+                            className: "lucide lucide-settings",
+                            stroke: "currentColor",
+                            fill: "none",
+                            onClick: () => {
+                                if (manager.isEnabled(addon.id)) {
+                                    setSection(addon.filename);
+                                }
+                                else {
+                                    BdApi.UI.showToast(
+                                        `${addon.name} is not enabled!`,
+                                        { type: "warning", forceShow: true }
+                                    );
+                                }
+                            },
+                            children: [
+                                h("path", {
+                                    d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+                                }),
+                                h("circle", {
+                                    cx: 12,
+                                    cy: 12,
+                                    r: 3
+                                })
+                            ]
+                        })
+                    ]
+                ]
+            })
+        }
+        
         function BetterDiscord() {
-            const [section, setSection] = useState(() => getSettingSections().find(m => m.section !== "CUSTOM").section);                        
+            const sections = getSettingSections((section) => setSection(section));
+            const [section, setSection] = useState(() => sections.at(1).section);
+
+            const [plugins, setPlugins] = useState(() => {
+                return Object.fromEntries(BdApi.Plugins.getAll().map((plugin) => [ plugin.filename, plugin ]));
+            });
+            const [themes, setThemes] = useState(() => {
+                return Object.fromEntries(BdApi.Themes.getAll().map((theme) => [ theme.filename, theme ]));
+            });
+
+            useEffect(() => {
+                let lastPlugins = BdApi.Plugins.getAll();
+                let lastThemes = BdApi.Themes.getAll();
+
+                let interval = setInterval(() => {
+                    if (!shallowCompareArrays(lastPlugins, lastPlugins = BdApi.Plugins.getAll())) {
+                        setPlugins(Object.fromEntries(lastPlugins.map((plugin) => [ plugin.filename, plugin ])));
+                    }
+                    if (!shallowCompareArrays(lastThemes, lastThemes = BdApi.Themes.getAll())) {
+                        setThemes(Object.fromEntries(lastThemes.map((theme) => [ theme.filename, theme ])));
+                    }
+                }, 50);
+
+                return () => clearInterval(interval);
+            }, []);
+
+            const themeSections = React.useMemo(() => {
+                const values = Object.values(themes);
+                if (!values.length) return [];
+
+                return [
+                    { section: "DIVIDER" },
+                    { section: "HEADER", label: sections.find(m => m.className === "bd-themes-tab").label },
+                    ...values.sort((a, b) => a.name.localeCompare(b.name)).map((theme) => {
+                        const item = { 
+                            section: theme.filename,
+                            label: theme.name,
+                            icon: h(Icon, { addon: theme, setSection, manager: BdApi.Themes }),
+                            element: () => [
+                                h("h2", { className: "bd-settings-title" }, theme.name),
+                                h("div", {
+                                    children: h("pre", {
+                                        children: h("code", {}, theme.css)
+                                    })
+                                })
+                            ],
+                            onClick: () => {}
+                        };
+
+                        return item;
+                    })
+                ]
+            }, [themes]);
 
             return h(SettingsView, {
-                sections: getSettingSections(setSection),
+                sections: [
+                    ...sections.slice(0, -2),
+                    { section: "DIVIDER" },
+                    { section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label },
+                    ...Object.values(plugins).sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : a.name.localeCompare(b.name)).map((plugin) => {
+                        const item = { 
+                            section: plugin.filename,
+                            label: plugin.name,
+                            icon: h(Icon, { addon: plugin, setSection, manager: BdApi.Plugins }),
+                            element: () => [
+                                h("h2", { className: "bd-settings-title" }, plugin.name),
+                                plugin.instance.getSettingsPanel()
+                            ],
+                            onClick: () => {}
+                        };
+
+                        return item;
+                    }),
+                    ...themeSections,
+                    { section: "DIVIDER" },
+                    { section: "HEADER", label: "Community" },
+                    {
+                        section: "bd-plugin-store",
+                        label: "Plugin Store",
+                        element: () => {
+                            const panel = sections[4].element();
+
+                            const storeResult = Utils.wrapInHooks(panel.props.children.type, {
+                                useState: () => [true, () => true]
+                            })(panel.props.children.props);
+
+                            return storeResult;
+                        }
+                    },
+                    {
+                        section: "bd-theme-store",
+                        label: "Theme Store",
+                        element: () => {
+                            const panel = sections[5].element();
+
+                            const storeResult = Utils.wrapInHooks(panel.props.children.type, {
+                                useState: () => [true, () => true]
+                            })(panel.props.children.props);
+
+                            return storeResult;
+                        }
+                    },
+                ],
                 section,
                 onSetSection: setSection,
                 onClose: LayerManager.pop,
@@ -1140,6 +1309,17 @@ module.exports = (meta) => {
                 #betterdiscord-dashboard button:hover {
                     background-color: var(--bg-brand);
                     color: var(--white);
+                }
+
+                :is(#bd-plugin-store-tab, #bd-theme-store-tab) .bd-addon-title :last-child {
+                    padding-left: 0;
+                }
+                :is(#bd-plugin-store-tab, #bd-theme-store-tab) .bd-addon-title :first-child {
+                    pointer-events: none;
+                    padding-right: 1ch;
+                }
+                :is(#bd-plugin-store-tab, #bd-theme-store-tab) .bd-addon-title > :not(span) {
+                    display: none;
                 }
             `);
 
