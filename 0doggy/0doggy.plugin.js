@@ -1,6 +1,6 @@
 /**
  * @name Doggy
- * @version 0.0.5
+ * @version 0.0.6
  */
 
 /**
@@ -1151,40 +1151,42 @@ module.exports = (meta) => {
          * @returns {React.FunctionComponent}
          */
         function createSettingsPanel(addon) {
-            const c = (node) => () => [
+            const c = (node) => [
                 h("h2", { className: "bd-settings-title" }, addon.name),
                 h(ErrorBoundary, null, node)
             ];
 
-            if (typeof addon.css === "string") return c(h("div", {
+            if (typeof addon.css === "string") return () => c(h("div", {
                 children: h("pre", {
                     children: h("code", {}, addon.css)
                 })
             }));
 
             if (typeof addon.instance?.getSettingsPanel !== "function") {
-                return c(h("div", {
+                return () => c(h("div", {
                     children: h("pre", {
                         children: h("code", {}, addon.filename)
                     })
                 }));
             }
 
-            const settingsPanel = addon.instance.getSettingsPanel();            
+            return () => {
+                const settingsPanel = addon.instance.getSettingsPanel();            
 
-            if (React.isValidElement(settingsPanel)) return c(settingsPanel);
-            if (typeof settingsPanel === "function") return c(h(settingsPanel));
+                if (React.isValidElement(settingsPanel)) return c(settingsPanel);
+                if (typeof settingsPanel === "function") return c(h(settingsPanel));
 
-            if (settingsPanel instanceof Node) {
-                const Wrapped = Utils.wrapElement(settingsPanel);
-                return c(h(Wrapped));
+                if (settingsPanel instanceof Node) {
+                    const Wrapped = Utils.wrapElement(settingsPanel);
+                    return c(h(Wrapped));
+                }
+
+                if (typeof settingsPanel === "string") {
+                    return v(h("div", { dangerouslySetInnerHTML: { __html: settingsPanel } }));
+                }
+
+                return c(settingsPanel);
             }
-
-            if (typeof settingsPanel === "string") {
-                return v(h("div", { dangerouslySetInnerHTML: { __html: settingsPanel } }));
-            }
-
-            return c(settingsPanel);
         }
         
         const getSettingSections = (onSetSection = () => {}) => {
