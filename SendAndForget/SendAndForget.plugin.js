@@ -2,43 +2,105 @@
  * @name SendAndForget
  * @description Don't follow forwarded messages after sending them. Port of [Vendicated/Vencord#3558](<https://github.com/Vendicated/Vencord/pull/3558>)
  * @author DoggyBootsy
- * @version 1.0.0
+ * @version 1.0.1
  */
 
+/** @type {import("betterdiscord").PluginCallback} */
+module.exports = (meta) => {
+	const { React, Webpack, Patcher, Utils } = new window.BdApi(meta.name);
 
-module.exports = class SendAndForget {
-	start() {
-		const [ module, key ] = BdApi.Webpack.getWithKey(m => typeof m === "function", {
-			target: BdApi.Webpack.getBySource(".ToastType.FORWARD")
-		});
+	const ForwardModalCTX = React.createContext();
 
-		BdApi.Patcher.instead("SendAndForget", module, key, (that, args, original) => {
-			const undo = BdApi.Patcher.instead("SendAndForget", BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H, "useCallback", (that, args, orig) => {
-				if (args[0].toString().includes(".getMessage(")) {
-					const orig = args[0];
-					args[0] = function() {
-						if (arguments.length === 1) {
-							arguments[1] = {};
-							arguments.length = 2;
+	class SendAndForget {
+		patchForwardModal() {
+			const [ module, key ] = Webpack.getWithKey(m => typeof m === "function", {
+				target: Webpack.getBySource(".ToastType.FORWARD")
+			});			
+			
+			Patcher.instead(module, key, (that, args, original) => {
+				const [state, setState] = React.useState(false);
+
+				const undo = Patcher.instead(React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H, "useCallback", (that, args, useCallback) => {
+					if (args[0].toString().includes(".getMessage(")) {
+						const orig = args[0];
+						args[0] = function() {							
+							if (arguments[0].length > 1 || state) return orig.apply(this, arguments);
+
+							if (arguments.length === 1) {
+								arguments[1] = {};
+								arguments.length = 2;
+							}							
+
+							arguments[1].transitionToDestination = false;
+
+							return orig.apply(this, arguments);
 						}
 
-						arguments[1].transitionToDestination = false;
-
-						return orig.apply(this, arguments);
+						args[1] = [
+							...args[1],
+							state
+						]
 					}
-				}
-				
-				return orig.apply(that, args);
+
+					
+					
+					return useCallback.apply(that, args);
+				});
+
+				const ret = original.apply(that, args);
+
+				undo();
+
+				return React.createElement(ForwardModalCTX.Provider, {
+					value: [
+						state, setState
+					],
+					children: ret
+				});
 			});
+		}
 
-			const ret = original.apply(that, args);
+		patchForwardModalFooter() {
+			const [ module, key ] = Webpack.getWithKey(Webpack.Filters.byStrings(".ForwardContextMessage", ".footerWarningWrapper"));
 
-			undo();
+			let SwitchItem = Webpack.getBySource("M5.13231 6.72963L6.7233 5.13864L14.855 13.2704L13.264 14.8614L5.13231 6.72963Z");
+			if (typeof SwitchItem === "object") SwitchItem = Object.values(SwitchItem)[0];
 
-			return ret;
-		});
+			const TooltipWrapper = Webpack.getByStrings('["children","className","element"]', {searchExports: true});
+
+			Patcher.after(module, key, (that, [{selectedDestinations}], res) => {
+				const footerButtons = Utils.findInTree(res, m => String(m?.className).startsWith("footerButtons_"), {
+					walkable: [
+						"props", 
+						"children"
+					]
+				});
+
+				const value = React.use(ForwardModalCTX);
+
+				if (!value || !footerButtons) return;
+
+				const [ checked, onChange ] = value;				
+
+				footerButtons.children.splice(1, 0, React.createElement(TooltipWrapper, {
+					text: "Follow Forward",
+					children: React.createElement(SwitchItem, {
+						checked,
+						onChange,
+						disabled: selectedDestinations.length > 1
+					})
+				}));
+			});
+		}
+
+		start() {
+			this.patchForwardModal();
+			this.patchForwardModalFooter();
+		}
+		stop() {
+			Patcher.unpatchAll();
+		}
 	}
-	stop() {
-		BdApi.Patcher.unpatchAll("SendAndForget");
-	}
+
+	return new SendAndForget();
 }
