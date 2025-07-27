@@ -1,6 +1,6 @@
 /**
  * @name Doggy
- * @version 0.0.6
+ * @version 0.0.7
  */
 
 /**
@@ -8,7 +8,7 @@
  * @param {? () => void} onError
  * @param {? () => void} onFinal
  */
-async function iife(callback, onError = console.error, onFinal) {
+async function call(callback, onError = console.error, onFinal) {
     try {
         const ret = callback();
         if (ret instanceof Promise) await ret;
@@ -20,13 +20,13 @@ async function iife(callback, onError = console.error, onFinal) {
     }
 }
 
-iife.once = function(name, ...args) {
+call.once = function (name, ...args) {
     const doggy = window[Symbol.for("doggy::iife")] ??= {};
 
     if (name in doggy) return doggy[name];
 
-    doggy[name] = iife(...args);
-}
+    doggy[name] = call(...args);
+};
 
 window.doggy ??= {};
 
@@ -38,23 +38,35 @@ if (BdApi.React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE)
         )
     });
 
-    BdApi.ReactDOM.render = function(node, jsx, opts) {
+    BdApi.ReactDOM.render = function (node, jsx, opts) {
         node.$$_doggy_root_$$ = BdApi.ReactDOM.createRoot(node, opts);
         node.$$_doggy_root_$$.render(jsx);
-    }
-    BdApi.ReactDOM.unmount = function(node) {
+    };
+    BdApi.ReactDOM.unmount = function (node) {
         node?.$$_doggy_root_$$?.unmount();
-    }
+    };
+}
+
+/**
+ * @template {Record<string, unknown>} T
+ * @template {Array<keyof T>} K
+ * @param {T} obj 
+ * @param {K} keys 
+ * @returns {Pick<T, K[number]>}
+ */
+function pick(obj, keys) {
+    return Object.fromEntries(Object.entries(obj).filter(([key]) => keys.includes(key)));
 }
 
 /** @type {import("betterdiscord").PluginCallback} */
 module.exports = (meta) => {
-    const { Patcher, Data, DOM, React, ContextMenu, UI } = new window.BdApi(meta.name);
+    const {Patcher, Data, DOM, React, ContextMenu, UI} = new window.BdApi(meta.name);
 
     /**
      * @template {React.ComponentType} T
-     * @param {T} defaultComponent 
-     * @param {string} id 
+     * @param {T} defaultComponent
+     * @param {string} id
+     * @param {? boolean} sharedState
      * @returns {React.ComponentClass<React.PropsWithChildren<T>> & { update(component: T): void; }}
      */
     function createUpdatableComponent(defaultComponent, id = defaultComponent.name) {
@@ -70,7 +82,7 @@ module.exports = (meta) => {
                 Updatable.prototype.state.component = component;
 
                 for (const instance of Updatable._instances) {
-                    instance.setState({ component });
+                    instance.setState({component});
                 }
             }
 
@@ -97,7 +109,7 @@ module.exports = (meta) => {
     /**
      * @template {T}
      * @param {T} foo
-     * @returns {T} 
+     * @returns {T}
      */
     function assertVoid(foo) {
         if (foo == null) {
@@ -107,10 +119,10 @@ module.exports = (meta) => {
         return foo;
     }
 
-    const Webpack = (function() {
+    const Webpack = (function () {
         let require;
         webpackChunkdiscord_app.push([
-            { some: () => true },
+            {some: () => true},
             {},
             r => typeof r.b === "string" ? (require = r) : void 0
         ]);
@@ -122,11 +134,11 @@ module.exports = (meta) => {
          */
         const webpack = {
             getById(id) {
-                return assertVoid(BdApi.Webpack.getModule((e, m) => m.id == id, { raw: true }));
+                return assertVoid(BdApi.Webpack.getModule((e, m) => m.id == id, {raw: true}));
             },
             require,
             cache: require.c
-        }
+        };
 
         Object.setPrototypeOf(webpack, BdApi.Webpack);
 
@@ -134,7 +146,7 @@ module.exports = (meta) => {
     })();
     const Filters = Webpack.Filters;
 
-    const { createElement, useState, useRef, createRef, Component, useSyncExternalStore, useEffect, useLayoutEffect } = React;
+    const {createElement, useState, useRef, createRef, Component, useSyncExternalStore, useEffect, useLayoutEffect} = React;
 
     /**
      * @type {<T extends string>(modules: Record<T, import("betterdiscord").ModuleQuery>) => Record<T, any>}
@@ -143,10 +155,10 @@ module.exports = (meta) => {
         const keys = Object.keys(modules);
         const bulk = Webpack.getBulk(...Object.values(modules));
 
-        return Object.fromEntries(keys.map((key, i) => [ key, bulk[i] ]));
-    }
+        return Object.fromEntries(keys.map((key, i) => [key, bulk[i]]));
+    };
 
-    const { onStop, onStart } = (function() {
+    const {onStop, onStart} = (function () {
         let insideOnStart = false;
 
         /**
@@ -157,8 +169,12 @@ module.exports = (meta) => {
             const undo = () => onStop._callbacks.delete(newCallback);
 
             function newCallback() {
-                if (once) undo();
-                callback();
+                try {
+                    callback();
+                }
+                finally {
+                    if (once) undo();
+                }
             }
 
             onStop._callbacks.add(newCallback);
@@ -191,79 +207,15 @@ module.exports = (meta) => {
 
         return {
             onStop, onStart
-        }
+        };
     })();
 
     const layerContext = doggy.__layerContext ??= React.createContext(null);
 
-    (function() {
-        const jsx = Webpack.getModule(m => m.jsx && m.jsxs);
-
-        const addoncardFilter = Filters.byStrings(".showAddonSettingsModal(");
-        
-        const sym = Symbol.for("react.context");
-
-        const matches = doggy.__reactPatches = new WeakMap();
-        function patch(instance, [type, props], node) {
-            if (!["object", "function"].includes(typeof type)) return;
-
-            if (type.$$typeof === sym) return;
-            
-            let newType = matches.get(type);
-            if (!matches.has(type)) {
-                if (addoncardFilter(type)) {
-                    const newAddonCard = (props) => {
-                        const layer = React.useContext(layerContext);                        
-
-                        const ret = type(props);
-
-                        if (!layer) return ret;
-
-                        const controls = Utils.findInReactTree(ret, m => m?.className === "bd-controls");
-
-                        if (controls?.children[0]) {
-                            const children = controls.children[0].props.children;
-
-                            controls.children[0] = React.cloneElement(controls.children[0], {
-                                children: function() {
-                                    const ret = children.apply(this, arguments);
-
-                                    ret.props.onClick = () => {
-                                        layer.onSetSection(props.addon.filename);
-                                    }
-
-                                    return ret;
-                                }
-                            });
-                        }
-
-                        return ret;
-                    };
-
-                    matches.set(type, newAddonCard);
-                }
-                else {
-                    newType = type;
-                    matches.set(type, type);
-                }
-            }
-
-            node.type = newType || type;
-
-            return node;
-        }
-
-        onStart(() => {
-            Patcher.after(jsx, "jsx", patch);
-            Patcher.after(jsx, "jsxs", patch);
-            Patcher.after(React, "createElement", patch);
-        });
-    })();
-
     const FluxDispatcher = Webpack.getByKeys("_dispatch");
     const dispatch = (type, data = {}) => FluxDispatcher.dispatch({...data, type});
 
-    const { TypingModule, UploadButton } = getBulk({
+    const {TypingModule, UploadButton} = getBulk({
         TypingModule: {
             filter: x => x.startTyping
         },
@@ -273,12 +225,12 @@ module.exports = (meta) => {
         }
     });
 
-    const { Button, SwitchInput, SettingItem, SettingGroup: $SettingGroup, ErrorBoundary } = BdApi.Components;
+    const {Button, SwitchInput, SettingItem, SettingGroup: $SettingGroup, ErrorBoundary} = BdApi.Components;
 
     /**
-     * 
-     * @param {import("betterdiscord").SettingGroupProps} props 
-     * @returns 
+     *
+     * @param {import("betterdiscord").SettingGroupProps} props
+     * @returns
      */
     function SettingGroup(props) {
         const groups = Storage.get("setting-group");
@@ -288,7 +240,7 @@ module.exports = (meta) => {
             shown: React.useMemo(() => {
                 if ("shown" in props) return props.shown;
                 if (!props.collapsible) return true;
-                
+
                 if (!props.id) return false;
 
                 return groups[props.id] ?? false;
@@ -301,7 +253,7 @@ module.exports = (meta) => {
                     [props.id]: v
                 });
             }, [groups, props.id])
-        })
+        });
     }
 
     const h = React.createElement;
@@ -315,9 +267,9 @@ module.exports = (meta) => {
     }
 
     /** @type {import("buffer")["Buffer"]} */
-    const Buffer = Webpack.getByKeys("TYPED_ARRAY_SUPPORT", { searchExports: true });
+    const Buffer = Webpack.getByKeys("TYPED_ARRAY_SUPPORT", {searchExports: true});
 
-    let Router, RouterContext;(function() {
+    let Router, RouterContext; (function () {
         const key = Object.keys(appMount()).find(m => m.startsWith("__reactContainer$"));
         const root = appMount()[key];
 
@@ -329,9 +281,9 @@ module.exports = (meta) => {
 
         Router = container.stateNode.props.history;
         RouterContext = container.child.type;
-   })();   
+    })();
 
-    const Storage = (function() {
+    const Storage = (function () {
         const defaultSettings = {
             /** @type {Record<string, boolean>} */
             "silent-typing": {},
@@ -340,7 +292,9 @@ module.exports = (meta) => {
             /** @type {{ "role-gradient": boolean }} */
             "always-animate": {},
             /** @type {Record<string, boolean>} */
-            "setting-group": {}
+            "setting-group": {},
+            /** @type {Record<string, unknown>} */
+            "misc": {}
         };
 
         /** @type {typeof defaultSettings} */
@@ -387,8 +341,8 @@ module.exports = (meta) => {
                 BdApi.Hooks.useData(meta.name, key);
                 return settings[key];
             }
-            
-            const [ value, setValue ] = React.useState(() => settings[key]);
+
+            const [value, setValue] = React.useState(() => settings[key]);
 
             React.useInsertionEffect(() => {
                 function listener() {
@@ -399,7 +353,7 @@ module.exports = (meta) => {
                 listeners[key].add(listener);
 
                 return () => listeners[key].delete(listener);
-            }, [ ]);
+            }, []);
 
             return value;
         }
@@ -418,7 +372,7 @@ module.exports = (meta) => {
             deleteProperty(target, prop) {
                 deleteP(prop);
             },
-            setPrototypeOf() { return false; }
+            setPrototypeOf() {return false;}
         });
 
         let proxy = constructProxy();
@@ -443,31 +397,31 @@ module.exports = (meta) => {
          */
         function bind(key) {
             return cache[key] ??= {
-                use() { return use(key); },
-                get() { return get(key); },
-                delete() { return deleteP(key); },
-                set(value) { return set(key, value); },
+                use() {return use(key);},
+                get() {return get(key);},
+                delete() {return deleteP(key);},
+                set(value) {return set(key, value);},
                 get value() {
                     return get(key);
                 },
                 set value(value) {
                     return set(key, value);
                 }
-            }
+            };
         }
 
         return {
-            get proxy() {return proxy},
+            get proxy() {return proxy;},
             set proxy(v) {
                 settings = Object.assign(v, defaultSettings);
                 proxy = constructProxy();
             },
-            useReactiveProxy: () => useReactiveObject(proxy),
+            useReactiveProxy: () => useReactiveObject(proxy, false),
             get, set, delete: deleteP, use, clear, bind
-        }
+        };
     })();
 
-    const Utils = (function() {
+    const Utils = (function () {
         // 'Iterator.from' polyfill like thing
         function iteratorFrom(iterator) {
             if (typeof window.Iterator === "function") {
@@ -495,7 +449,7 @@ module.exports = (meta) => {
                 enumerable: false,
                 writable: true,
                 configurable: true,
-                value: function*() {
+                value: function* () {
                     let result;
                     while ((result = generator.next(), !result.done)) yield result.value;
                 }
@@ -547,7 +501,7 @@ module.exports = (meta) => {
                 return this.#nodes.find(node => node instanceof Element && node.id === id) || null;
             }
 
-            get length() { return this.#nodes.length; }
+            get length() {return this.#nodes.length;}
 
             *values() {
                 yield* this.#nodes;
@@ -559,7 +513,7 @@ module.exports = (meta) => {
             }
             *entries() {
                 for (let index = 0; index < this.#nodes.length; index++) {
-                    yield [ index, this.#nodes[index] ];
+                    yield [index, this.#nodes[index]];
                 }
             }
 
@@ -609,12 +563,6 @@ module.exports = (meta) => {
             while (!container.stateNode?.isReactComponent) {
                 container = container.child;
             }
-            
-            container = container.child;
-
-            while (!container.stateNode?.isReactComponent) {
-                container = container.child;
-            }
 
             container = container.child;
 
@@ -631,7 +579,7 @@ module.exports = (meta) => {
         }
 
         function findInReactTree(tree, filter) {
-            return BdApi.Utils.findInTree(tree, filter, { walkable: [ "props", "children" ]})
+            return BdApi.Utils.findInTree(tree, filter, {walkable: ["props", "children"]});
         }
 
         /**
@@ -664,41 +612,41 @@ module.exports = (meta) => {
             const listeners = new Set();
 
             function accessor(forceNoUseHook = false) {
-              if (forceNoUseHook || !String(React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H.useSyncExternalStore).includes("349")) {
-                return currentState;
-              }
+                if (forceNoUseHook || !String(React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H.useSyncExternalStore).includes("349")) {
+                    return currentState;
+                }
 
-              return useSyncExternalStore((onChange) => {
-                listeners.add(onChange);
-                return () => listeners.delete(onChange)
-              }, () => currentState);
+                return useSyncExternalStore((onChange) => {
+                    listeners.add(onChange);
+                    return () => listeners.delete(onChange);
+                }, () => currentState);
             }
 
             function setter(value) {
-              if (typeof value === "function") value = value(currentState);
-              currentState = value;
+                if (typeof value === "function") value = value(currentState);
+                currentState = value;
 
-              for (const listener of listeners) listener();
+                for (const listener of listeners) listener();
 
-              return currentState;
+                return currentState;
             }
 
             function addChangeListener(callback) {
-              function callbackWrapper() {
-                try {
-                  callback(currentState);
+                function callbackWrapper() {
+                    try {
+                        callback(currentState);
+                    }
+                    catch (error) {}
                 }
-                catch (error) {}
-              }
 
-              listeners.add(callbackWrapper);
-              return () => void listeners.delete(callbackWrapper);
+                listeners.add(callbackWrapper);
+                return () => void listeners.delete(callbackWrapper);
             }
 
             const state = [
-              accessor,
-              setter,
-              addChangeListener
+                accessor,
+                setter,
+                addChangeListener
             ];
 
             return state;
@@ -721,10 +669,19 @@ module.exports = (meta) => {
             ...BdApi.DOM,
             ...BdApi.Utils,
             ...BdApi.ReactUtils
-        }
+        };
     })();
 
-    const CSS = (function() {
+    /**
+     * @template T
+     * @template {object} P
+     * @param {{ stores: unknown[], factory: () => T, component: (state: T, props: P) => React.ReactNode}} param0
+     */
+    function createFluxComponent({stores, factory, component}) {
+
+    }
+
+    const CSS = (function () {
         const styles = new Set();
         onStop(() => {
             for (const element of styles) {
@@ -745,7 +702,7 @@ module.exports = (meta) => {
             addStyle(id, css) {
                 if (arguments.length === 1) {
                     css = id;
-                    id = "db-" + i++
+                    id = "db-" + i++;
                 }
 
                 id = `${meta.name}-${id}`;
@@ -760,23 +717,23 @@ module.exports = (meta) => {
             removeStyle(id) {
                 BdApi.DOM.removeStyle(`${meta.name}-${id}`);
             }
-        }
+        };
     })();
 
     const [access, setter] = Utils.createState(0);
 
     /**
      * @template {Record<PropertyKey, any>} T
-     * @param {T | (() => T)} obj 
-     * @param {? boolean} nested 
+     * @param {T | (() => T)} obj
+     * @param {? boolean} nested
      * @returns {T}
      */
     function useReactiveObject(obj, nested = true) {
         const [, forceUpdate] = React.useReducer(r => r + 1, 0);
-        
+
         return React.useMemo(() => {
             const map = new WeakMap();
-            
+
             function proxy(obj) {
                 const proxied = new Proxy(obj, {
                     get(target, prop, r) {
@@ -817,10 +774,13 @@ module.exports = (meta) => {
         }, []);
     }
 
-    function Settings({ onClose }) {
+    function Settings({onClose}) {
         const uap = Storage.use("user-action-profile");
         const aa = Storage.use("always-animate");
+        const misc = Storage.use("misc");
 
+        const updater = UpdaterStore.instance.access();
+        
         const state = useReactiveObject({
             foo: 123,
             bar: {
@@ -829,6 +789,54 @@ module.exports = (meta) => {
         });
 
         return [
+            h("div", {
+                style: {
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 12
+                },
+                children: [
+                    h("div", {
+                        children: [
+                            h("div", {
+                                style: {
+                                    color: "var(--text-primary)",
+                                    fontSize: "large"
+                                },
+                                children: "Updater"
+                            }),
+                            h("div", {
+                                style: {
+                                    color: "var(--text-muted)",
+                                    fontSize: "small"
+                                },
+                                children: `Latest version is v${updater.latestVersion}`
+                            })
+                        ]
+                    }),
+                    h("div", {
+                        style: {
+                            display: "flex",
+                            flexDirection: "row",
+                            gap: 8
+                        },
+                        children: [
+                            h(Button, {
+                                disabled: updater.loading,
+                                children: "Check For Update",
+                                onClick: () => UpdaterStore.instance.checkForUpdate()
+                            }),
+                            h(Button, {
+                                onClick: () => UpdaterStore.instance.update(),
+                                disabled: !updater.hasUpdate || updater.loading || updater.didError,
+                                children: updater.didError ? "ERR" : "Update"
+                            })
+                        ]
+                    })
+                ]
+            }),
             h(SettingGroup, {
                 name: "User Action Profile",
                 id: "user-action-profile",
@@ -841,7 +849,7 @@ module.exports = (meta) => {
                         children: h(SwitchInput, {
                             value: uap["mini-status"],
                             onChange: (v) => {
-                                Storage.set("user-action-profile", Object.assign({}, uap, { "mini-status": v }));
+                                Storage.set("user-action-profile", Object.assign({}, uap, {"mini-status": v}));
                             }
                         })
                     }),
@@ -852,7 +860,7 @@ module.exports = (meta) => {
                         children: h(SwitchInput, {
                             value: uap["show-user-header"] ?? true,
                             onChange: (v) => {
-                                Storage.set("user-action-profile", Object.assign({}, uap, { "show-user-header": v }));
+                                Storage.set("user-action-profile", Object.assign({}, uap, {"show-user-header": v}));
                             }
                         })
                     }),
@@ -870,7 +878,25 @@ module.exports = (meta) => {
                         children: h(SwitchInput, {
                             value: aa["role-gradient"] ?? true,
                             onChange: (v) => {
-                                Storage.set("always-animate", Object.assign({}, aa, { "role-gradient": v }));
+                                Storage.set("always-animate", Object.assign({}, aa, {"role-gradient": v}));
+                            }
+                        })
+                    })
+                ]
+            }),
+            h(SettingGroup, {
+                id: "misc",
+                name: "Misc",
+                collapsible: true,
+                children: [
+                    h(SettingItem, {
+                        name: "Battery",
+                        note: "Display your battery",
+                        inline: true,
+                        children: h(SwitchInput, {
+                            value: misc["battery"] ?? false,
+                            onChange: (v) => {
+                                Storage.set("misc", Object.assign({}, misc, {"battery": v}));
                             }
                         })
                     })
@@ -897,8 +923,15 @@ module.exports = (meta) => {
                                             state.foo++;
                                         }
                                     }),
-                                    h(Button, {
-                                        children: state.foo
+                                    h("div", {
+                                        style: {
+                                            whiteSpace: "pre",
+                                            background: "var(--background-base-lower)",
+                                            padding: 4,
+                                            borderRadius: 4,
+                                            color: "var(--text-default)"
+                                        },
+                                        children: JSON.stringify(state, null, "\t")
                                     }),
                                     h(Button, {
                                         children: "-",
@@ -922,7 +955,7 @@ module.exports = (meta) => {
                 children: "Close",
                 onClick: onClose
             })
-        ]
+        ];
     }
 
     const LayerManager = {
@@ -944,9 +977,13 @@ module.exports = (meta) => {
         }
     };
 
-    {Utils.LayerManager = LayerManager};
+    {Utils.LayerManager = LayerManager;};
 
-    iife(() => {
+    call(() => {
+        // onStart(() => Patcher.after(Webpack.Stores.SpamMessageRequestStore, "isSpam", () => false));
+    });
+
+    call(() => {
         const silentTyping = Storage.bind("silent-typing");
 
         onStart(() => {
@@ -969,7 +1006,7 @@ module.exports = (meta) => {
                             d: "M17.5611 3.16855L16.0795 2.31311L4.81056 21.8314L6.29223 22.6869L9.11697 17.8078L9.94301 16.3636L11.0611 14.4269L13.513 10.1802L17.5611 3.16855Z"
                         })
                     ]
-                })
+                });
             }
             function Keyboard(props) {
                 return h("svg", {
@@ -983,7 +1020,7 @@ module.exports = (meta) => {
                             d: "M0 3.25845C0 2.46264 0.316136 1.69942 0.878863 1.13669C1.44159 0.573964 2.20481 0.257828 3.00063 0.257828H21.0044C21.8002 0.257828 22.5634 0.573964 23.1261 1.13669C23.6889 1.69942 24.005 2.46264 24.005 3.25845V10.76C24.005 11.5558 23.6889 12.3191 23.1261 12.8818C22.5634 13.4445 21.8002 13.7606 21.0044 13.7606H3.00063C2.20481 13.7606 1.44159 13.4445 0.878863 12.8818C0.316136 12.3191 0 11.5558 0 10.76V3.25845ZM19.5041 3.63353V4.38369C19.5041 4.59073 19.6721 4.75877 19.8791 4.75877H20.6293C20.7288 4.75877 20.8242 4.71925 20.8945 4.64891C20.9649 4.57857 21.0044 4.48316 21.0044 4.38369V3.63353C21.0044 3.53405 20.9649 3.43865 20.8945 3.36831C20.8242 3.29797 20.7288 3.25845 20.6293 3.25845H19.8791C19.7797 3.25845 19.6843 3.29797 19.6139 3.36831C19.5436 3.43865 19.5041 3.53405 19.5041 3.63353ZM3.3757 6.25908C3.27623 6.25908 3.18082 6.2986 3.11048 6.36894C3.04014 6.43928 3.00063 6.53468 3.00063 6.63416V7.38431C3.00063 7.59136 3.16866 7.75939 3.3757 7.75939H4.12586C4.22534 7.75939 4.32074 7.71987 4.39108 7.64953C4.46142 7.57919 4.50094 7.48379 4.50094 7.38431V6.63416C4.50094 6.53468 4.46142 6.43928 4.39108 6.36894C4.32074 6.2986 4.22534 6.25908 4.12586 6.25908H3.3757ZM6.00125 6.63416V7.38431C6.00125 7.59136 6.16929 7.75939 6.37633 7.75939H7.12649C7.22596 7.75939 7.32137 7.71987 7.39171 7.64953C7.46205 7.57919 7.50156 7.48379 7.50156 7.38431V6.63416C7.50156 6.53468 7.46205 6.43928 7.39171 6.36894C7.32137 6.2986 7.22596 6.25908 7.12649 6.25908H6.37633C6.27685 6.25908 6.18145 6.2986 6.11111 6.36894C6.04077 6.43928 6.00125 6.53468 6.00125 6.63416ZM9.37695 6.25908C9.27748 6.25908 9.18207 6.2986 9.11173 6.36894C9.04139 6.43928 9.00188 6.53468 9.00188 6.63416V7.38431C9.00188 7.59136 9.16991 7.75939 9.37695 7.75939H10.1271C10.2266 7.75939 10.322 7.71987 10.3923 7.64953C10.4627 7.57919 10.5022 7.48379 10.5022 7.38431V6.63416C10.5022 6.53468 10.4627 6.43928 10.3923 6.36894C10.322 6.2986 10.2266 6.25908 10.1271 6.25908H9.37695ZM12.0025 6.63416V7.38431C12.0025 7.59136 12.1705 7.75939 12.3776 7.75939H13.1277C13.2272 7.75939 13.3226 7.71987 13.393 7.64953C13.4633 7.57919 13.5028 7.48379 13.5028 7.38431V6.63416C13.5028 6.53468 13.4633 6.43928 13.393 6.36894C13.3226 6.2986 13.2272 6.25908 13.1277 6.25908H12.3776C12.2781 6.25908 12.1827 6.2986 12.1124 6.36894C12.042 6.43928 12.0025 6.53468 12.0025 6.63416ZM19.8791 6.25908C19.7797 6.25908 19.6843 6.2986 19.6139 6.36894C19.5436 6.43928 19.5041 6.53468 19.5041 6.63416V7.38431C19.5041 7.59136 19.6721 7.75939 19.8791 7.75939H20.6293C20.7288 7.75939 20.8242 7.71987 20.8945 7.64953C20.9649 7.57919 21.0044 7.48379 21.0044 7.38431V6.63416C21.0044 6.53468 20.9649 6.43928 20.8945 6.36894C20.8242 6.2986 20.7288 6.25908 20.6293 6.25908H19.8791ZM19.8791 9.2597C19.7797 9.2597 19.6843 9.29922 19.6139 9.36956C19.5436 9.4399 19.5041 9.53531 19.5041 9.63478V10.3849C19.5041 10.592 19.6721 10.76 19.8791 10.76H20.6293C20.7288 10.76 20.8242 10.7205 20.8945 10.6502C20.9649 10.5798 21.0044 10.4844 21.0044 10.3849V9.63478C21.0044 9.53531 20.9649 9.4399 20.8945 9.36956C20.8242 9.29922 20.7288 9.2597 20.6293 9.2597H19.8791ZM15.3782 6.25908C15.2787 6.25908 15.1833 6.2986 15.113 6.36894C15.0426 6.43928 15.0031 6.53468 15.0031 6.63416V7.38431C15.0031 7.59136 15.1712 7.75939 15.3782 7.75939H17.6287C17.7282 7.75939 17.8236 7.71987 17.8939 7.64953C17.9642 7.57919 18.0038 7.48379 18.0038 7.38431V6.63416C18.0038 6.53468 17.9642 6.43928 17.8939 6.36894C17.8236 6.2986 17.7282 6.25908 17.6287 6.25908H15.3782ZM16.5034 9.63478V10.3849C16.5034 10.592 16.6715 10.76 16.8785 10.76H17.6287C17.7282 10.76 17.8236 10.7205 17.8939 10.6502C17.9642 10.5798 18.0038 10.4844 18.0038 10.3849V9.63478C18.0038 9.53531 17.9642 9.4399 17.8939 9.36956C17.8236 9.29922 17.7282 9.2597 17.6287 9.2597H16.8785C16.779 9.2597 16.6836 9.29922 16.6133 9.36956C16.543 9.4399 16.5034 9.53531 16.5034 9.63478ZM16.8785 3.25845C16.779 3.25845 16.6836 3.29797 16.6133 3.36831C16.543 3.43865 16.5034 3.53405 16.5034 3.63353V4.38369C16.5034 4.59073 16.6715 4.75877 16.8785 4.75877H17.6287C17.7282 4.75877 17.8236 4.71925 17.8939 4.64891C17.9642 4.57857 18.0038 4.48316 18.0038 4.38369V3.63353C18.0038 3.53405 17.9642 3.43865 17.8939 3.36831C17.8236 3.29797 17.7282 3.25845 17.6287 3.25845H16.8785ZM13.5028 3.63353V4.38369C13.5028 4.59073 13.6708 4.75877 13.8779 4.75877H14.628C14.7275 4.75877 14.8229 4.71925 14.8933 4.64891C14.9636 4.57857 15.0031 4.48316 15.0031 4.38369V3.63353C15.0031 3.53405 14.9636 3.43865 14.8933 3.36831C14.8229 3.29797 14.7275 3.25845 14.628 3.25845H13.8779C13.7784 3.25845 13.683 3.29797 13.6127 3.36831C13.5423 3.43865 13.5028 3.53405 13.5028 3.63353ZM10.8773 3.25845C10.7778 3.25845 10.6824 3.29797 10.612 3.36831C10.5417 3.43865 10.5022 3.53405 10.5022 3.63353V4.38369C10.5022 4.59073 10.6702 4.75877 10.8773 4.75877H11.6274C11.7269 4.75877 11.8223 4.71925 11.8926 4.64891C11.963 4.57857 12.0025 4.48316 12.0025 4.38369V3.63353C12.0025 3.53405 11.963 3.43865 11.8926 3.36831C11.8223 3.29797 11.7269 3.25845 11.6274 3.25845H10.8773ZM7.50156 3.63353V4.38369C7.50156 4.59073 7.6696 4.75877 7.87664 4.75877H8.6268C8.72627 4.75877 8.82168 4.71925 8.89202 4.64891C8.96236 4.57857 9.00188 4.48316 9.00188 4.38369V3.63353C9.00188 3.53405 8.96236 3.43865 8.89202 3.36831C8.82168 3.29797 8.72627 3.25845 8.6268 3.25845H7.87664C7.77716 3.25845 7.68176 3.29797 7.61142 3.36831C7.54108 3.43865 7.50156 3.53405 7.50156 3.63353ZM3.3757 3.25845C3.27623 3.25845 3.18082 3.29797 3.11048 3.36831C3.04014 3.43865 3.00063 3.53405 3.00063 3.63353V4.38369C3.00063 4.59073 3.16866 4.75877 3.3757 4.75877H5.62617C5.72565 4.75877 5.82105 4.71925 5.89139 4.64891C5.96173 4.57857 6.00125 4.48316 6.00125 4.38369V3.63353C6.00125 3.53405 5.96173 3.43865 5.89139 3.36831C5.82105 3.29797 5.72565 3.25845 5.62617 3.25845H3.3757ZM3.00063 9.63478V10.3849C3.00063 10.592 3.16866 10.76 3.3757 10.76H4.12586C4.22534 10.76 4.32074 10.7205 4.39108 10.6502C4.46142 10.5798 4.50094 10.4844 4.50094 10.3849V9.63478C4.50094 9.53531 4.46142 9.4399 4.39108 9.36956C4.32074 9.29922 4.22534 9.2597 4.12586 9.2597H3.3757C3.27623 9.2597 3.18082 9.29922 3.11048 9.36956C3.04014 9.4399 3.00063 9.53531 3.00063 9.63478ZM6.37633 9.2597C6.27685 9.2597 6.18145 9.29922 6.11111 9.36956C6.04077 9.4399 6.00125 9.53531 6.00125 9.63478V10.3849C6.00125 10.592 6.16929 10.76 6.37633 10.76H14.628C14.7275 10.76 14.8229 10.7205 14.8933 10.6502C14.9636 10.5798 15.0031 10.4844 15.0031 10.3849V9.63478C15.0031 9.53531 14.9636 9.4399 14.8933 9.36956C14.8229 9.29922 14.7275 9.2597 14.628 9.2597H6.37633Z"
                         })
                     ]
-                })
+                });
             }
 
             function useSetting(channelId) {
@@ -1042,7 +1079,7 @@ module.exports = (meta) => {
                 return res;
             }
 
-            Patcher.before(UploadButton, "Z", (that, [ props ]) => {
+            Patcher.before(UploadButton, "Z", (that, [props]) => {
                 if (!props) return;
 
                 const tooltip = props.children;
@@ -1083,28 +1120,28 @@ module.exports = (meta) => {
                 original(...args);
             });
 
-            CSS.addStyle(`.doggy-silent-typing svg circle:first-child + path { color: red; }`)
+            CSS.addStyle(`.doggy-silent-typing svg circle:first-child + path { color: red; }`);
         });
     });
 
-    iife(() => {
-        
+    call(() => {
+
     });
 
-    iife(() => {
+    call(() => {
         return;
 
-        onStart(() => {         
-               
-            Patcher.after(Webpack.getByKeys("Channel", "GuildName", { raw: true }).exports, "Z", console.log);
-        });
-    })
+        onStart(() => {
 
-    iife(() => {
+            Patcher.after(Webpack.getByKeys("Channel", "GuildName", {raw: true}).exports, "Z", console.log);
+        });
+    });
+
+    call(() => {
         const moment = Webpack.getModule(m => m.isMoment);
 
         onStart(() => {
-            Patcher.instead(...Webpack.getWithKey(Filters.byStrings("().localeData(),", '<2?"nextDay":"sameElse"', "L LT")), (that, [ timestamp ]) => {
+            Patcher.instead(...Webpack.getWithKey(Filters.byStrings("().localeData(),", '<2?"nextDay":"sameElse"', "L LT")), (that, [timestamp]) => {
                 return moment(timestamp).calendar(null, {
                     sameDay: "[Today at] LT",
                     nextDay: "[Tomorrow at] LT",
@@ -1117,17 +1154,17 @@ module.exports = (meta) => {
         });
     });
 
-    iife(() => {
+    call(() => {
         let SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
 
-        !async function() {
+        !async function () {
             if (!SettingsView) {
                 const regex = /{createPromise:\(\)=>n\.e\("\d+"\)\.then\(n\.bind\(n,\d+\)\),webpackId:\d+,name:"UserSettings"}/;
                 let object = {
                     createPromise: () => Promise.reject()
-                }
+                };
 
-                for (const key in Webpack.modules) {            
+                for (const key in Webpack.modules) {
                     if (Object.prototype.hasOwnProperty.call(Webpack.modules, key)) {
                         const match = String(Webpack.modules[key]).match(regex);
 
@@ -1140,19 +1177,19 @@ module.exports = (meta) => {
                 }
 
                 await object.createPromise();
-                
+
                 SettingsView = Webpack.getByPrototypeKeys("getPredicateSections");
             }
         }();
 
         /**
-         * 
-         * @param {any} addon 
+         *
+         * @param {any} addon
          * @returns {React.FunctionComponent}
          */
         function createSettingsPanel(addon) {
             const c = (node) => [
-                h("h2", { className: "bd-settings-title" }, addon.name),
+                h("h2", {className: "bd-settings-title"}, addon.name),
                 h(ErrorBoundary, null, node)
             ];
 
@@ -1171,7 +1208,7 @@ module.exports = (meta) => {
             }
 
             return () => {
-                const settingsPanel = addon.instance.getSettingsPanel();            
+                const settingsPanel = addon.instance.getSettingsPanel();
 
                 if (React.isValidElement(settingsPanel)) return c(settingsPanel);
                 if (typeof settingsPanel === "function") return c(h(settingsPanel));
@@ -1182,13 +1219,13 @@ module.exports = (meta) => {
                 }
 
                 if (typeof settingsPanel === "string") {
-                    return v(h("div", { dangerouslySetInnerHTML: { __html: settingsPanel } }));
+                    return v(h("div", {dangerouslySetInnerHTML: {__html: settingsPanel}}));
                 }
 
                 return c(settingsPanel);
-            }
+            };
         }
-        
+
         const getSettingSections = (onSetSection = () => {}) => {
             let sections = [];
 
@@ -1210,14 +1247,16 @@ module.exports = (meta) => {
             });
 
             return sections.slice(1);
-        }
+        };
+        
+        doggy.getSettingSections = getSettingSections;
 
         function shallowCompareArrays(arr1, arr2) {
             return arr1.length === arr2.length && arr1.every((val, index) => val === arr2[index]);
         }
 
         function Icon({addon, setSection, manager}) {
-            const [ isEnabled, setEnabled ] = useState(() => manager.isEnabled(addon.id));
+            const [isEnabled, setEnabled] = useState(() => manager.isEnabled(addon.id));
 
             useEffect(() => {
                 const interval = setInterval(() => {
@@ -1240,7 +1279,7 @@ module.exports = (meta) => {
                 },
                 children: [
                     addon.filename !== "0doggy.plugin.js" && h(SwitchInput, {
-                        value: isEnabled, 
+                        value: isEnabled,
                         onChange: () => {
                             manager[isEnabled ? "disable" : "enable"](addon.id);
                             setEnabled(manager.isEnabled(addon.id));
@@ -1265,7 +1304,7 @@ module.exports = (meta) => {
                     //     stroke: "currentColor",
                     //     fill: "none",
                     //     onClick: () => {
-                            
+
                     //     },
                     //     children: [
                     //         h("path", {
@@ -1311,8 +1350,60 @@ module.exports = (meta) => {
                     //     })
                     // ],
                 ]
-            })
+            });
         }
+
+        const { module, key } = (() => {
+            const foundModule = BdApi.Webpack.getModule((m) => Object.values(m).some((v) => typeof v === "function" && v.toString().includes(`type:"CONTEXT_MENU_CLOSE"`)), { searchExports: false });
+            const foundKey = Object.keys(foundModule).find((k) => foundModule[k].length === 3);
+            return { module: foundModule, key: foundKey };
+        })();
+
+        function openBetterDiscordMenu(event) {
+            function Component() {
+                const [ child, setChildren ] = useState();
+
+                const undo = Patcher.after(Array, "isArray", (that, [arg], ret) => {
+                    if (arg?.navId === "user-settings-cog") {
+                        undo();
+
+                        return true;
+                    }
+
+                    return ret;
+                });                
+
+                return h(BdApi.ContextMenu.Menu, {
+                    navId: "user-settings-cog",
+                    onClose: BdApi.ContextMenu.close,
+                    some: e => String(e).includes("my_account"),
+                    push: c => {
+                        if (typeof child === "undefined") {
+                            setChildren(c.props.children[0].props.children);
+                            
+                        }
+                    },
+                    children: child
+                });
+            }
+            
+            module[key](event, async () => Component);
+        }
+
+        onStart(() => {
+            const undo = BdApi.ContextMenu.patch("user-settings-cog", (retVal) => {
+                const target = Utils.findInReactTree(retVal, (b) => Array.isArray(b) && b.some((e) => e?.key?.toLowerCase() === "my_account"));
+                if (!target) return;
+
+                const index = target.findIndex((e) => e?.props?.children?.[0]?.props?.id === "BetterDiscord");
+
+                if (index === -1) return;
+
+                target.splice(index, 1);
+            });
+
+            onStop(undo);
+        })
 
         function getBDSetting(groupKey, settingKey, reactive = false) {
             const sections = getSettingSections();
@@ -1320,31 +1411,84 @@ module.exports = (meta) => {
             const groups = sections[1].element().type(sections[1].element().props).props.children[1];
 
             const group = groups.find(m => m.props.id === groupKey);
-            if (!group) return { value: null, disabled: null };
+            if (!group) return {value: null, disabled: null};
 
             const groupRes = Utils.wrapInHooks(group.type)(group.props);
 
             const settingItem = groupRes.props.children[0].find(m => m.props.id === settingKey);
 
-            let setting = { value: null, disabled: null };
+            let setting = {value: null, disabled: null};
             if (!settingItem) return setting;
 
             if (reactive) settingItem.type(settingItem.props);
 
-            Utils.wrapInHooks(settingItem.type, { useCallback: v => setting = v() })(settingItem.props);
+            Utils.wrapInHooks(settingItem.type, {
+                useCallback: v => (setting = v(), v),
+                useRef: v => {
+                    return {
+                        get current() {return v;},
+                        set current(n) {
+                            v = n;
+
+                            if (n instanceof Object && "value" in n) {
+                                setting = n;
+                            }
+                        }
+                    };
+                }
+            })(settingItem.props);
 
             return setting;
         }
-        
-        function BetterDiscord() {                        
+
+        function AddonCard(props) {
+            const ret = AddonCard._(props);
+            const { onSetSection } = React.useContext(layerContext);
+            if (!onSetSection) return ret;
+
+            const controls = ret.props.children[2].props.children[1].props.children;
+            const settingsButton = controls[0];
+
+            if (settingsButton) {
+                controls[0] = React.cloneElement(settingsButton, {
+                    children: (ttProps) => {
+                        const res = settingsButton.props.children(ttProps);
+
+                        res.props.onClick = () => {
+                            onSetSection(props.addon.filename);
+                        }
+
+                        return res;
+                    }
+                });
+            }
+
+            return ret;
+        }
+
+        function AddonPage(props) {
+            const ret = AddonPage._(props);            
+
+            const addonList = ret.find(m => m?.key === "addonList");
+
+            for (const element of addonList.props.children) {
+                AddonCard._ ??= element.props.children.type;
+
+                element.props.children.type = AddonCard;
+            }
+
+            return ret;
+        }
+
+        function BetterDiscord() {
             const sections = React.useMemo(() => getSettingSections((section) => setSection(section)));
             const [section, setSection] = useState(() => sections.at(1).section);
 
             const [plugins, setPlugins] = useState(() => {
-                return Object.fromEntries(BdApi.Plugins.getAll().map((plugin) => [ plugin.filename, plugin ]));
+                return Object.fromEntries(BdApi.Plugins.getAll().map((plugin) => [plugin.filename, plugin]));
             });
             const [themes, setThemes] = useState(() => {
-                return Object.fromEntries(BdApi.Themes.getAll().map((theme) => [ theme.filename, theme ]));
+                return Object.fromEntries(BdApi.Themes.getAll().map((theme) => [theme.filename, theme]));
             });
 
             useEffect(() => {
@@ -1353,10 +1497,10 @@ module.exports = (meta) => {
 
                 let interval = setInterval(() => {
                     if (!shallowCompareArrays(lastPlugins, lastPlugins = BdApi.Plugins.getAll())) {
-                        setPlugins(Object.fromEntries(lastPlugins.map((plugin) => [ plugin.filename, plugin ])));
+                        setPlugins(Object.fromEntries(lastPlugins.map((plugin) => [plugin.filename, plugin])));
                     }
                     if (!shallowCompareArrays(lastThemes, lastThemes = BdApi.Themes.getAll())) {
-                        setThemes(Object.fromEntries(lastThemes.map((theme) => [ theme.filename, theme ])));
+                        setThemes(Object.fromEntries(lastThemes.map((theme) => [theme.filename, theme])));
                     }
                 }, 50);
 
@@ -1368,10 +1512,10 @@ module.exports = (meta) => {
                 if (!values.length) return [];
 
                 return [
-                    { section: "DIVIDER" },
-                    { section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label },
+                    {section: "DIVIDER"},
+                    {section: "HEADER", label: sections.find(m => m.className === "bd-plugins-tab").label},
                     ...values.sort((a, b) => a.filename === "0doggy.plugin.js" ? -1 : b.filename === "0doggy.plugin.js" ? 1 : a.name.localeCompare(b.name)).filter(m => typeof m.instance?.getSettingsPanel === "function").map((plugin) => {
-                        const item = { 
+                        const item = {
                             section: plugin.filename,
                             label: plugin.name,
                             element: createSettingsPanel(plugin),
@@ -1382,15 +1526,15 @@ module.exports = (meta) => {
                                 else {
                                     BdApi.UI.showToast(
                                         `${plugin.name} is not enabled!`,
-                                        { type: "warning", forceShow: true }
+                                        {type: "warning", forceShow: true}
                                     );
                                 }
                             }
                         };
-                        
+
                         return item;
                     })
-                ]
+                ];
             }, [plugins]);
 
             const themeSections = React.useMemo(() => {
@@ -1400,39 +1544,39 @@ module.exports = (meta) => {
                 if (!values.length) return [];
 
                 return [
-                    { section: "DIVIDER" },
-                    { section: "HEADER", label: sections.find(m => m.className === "bd-themes-tab").label },
+                    {section: "DIVIDER"},
+                    {section: "HEADER", label: sections.find(m => m.className === "bd-themes-tab").label},
                     ...values.sort((a, b) => a.name.localeCompare(b.name)).map((theme) => {
-                        const item = { 
+                        const item = {
                             section: theme.filename,
                             label: theme.name,
-                            icon: h(Icon, { addon: theme, setSection, manager: BdApi.Themes }),
+                            icon: h(Icon, {addon: theme, setSection, manager: BdApi.Themes}),
                             element: createSettingsPanel(theme),
                             // onClick: () => {}
                         };
 
                         return item;
                     })
-                ]
+                ];
             }, [themes]);
 
             const isAddonStoreEnabled = getBDSetting("store", "bdAddonStore", true);
-            
+
             const communitySections = React.useMemo(() => {
                 if (!isAddonStoreEnabled.value) return [];
 
                 return [
-                    { section: "DIVIDER" },
-                    { section: "HEADER", label: "Community" },
+                    {section: "DIVIDER"},
+                    {section: "HEADER", label: "Community"},
                     {
                         section: "bd-plugin-store",
                         label: "Plugin Store",
                         element: () => {
-                            const panel = sections[4].element();
+                            const panel = sections[4].element();                            
 
-                            const storeResult = Utils.wrapInHooks(panel.props.children.type, {
+                            const storeResult = Utils.wrapInHooks(panel.props?.children?.type || panel.type, {
                                 useState: () => [true, () => true]
-                            })(panel.props.children.props);
+                            })(panel.props?.children?.props || panel.props);
 
                             return storeResult;
                         }
@@ -1443,14 +1587,14 @@ module.exports = (meta) => {
                         element: () => {
                             const panel = sections[5].element();
 
-                            const storeResult = Utils.wrapInHooks(panel.props.children.type, {
+                            const storeResult = Utils.wrapInHooks(panel.props?.children?.type || panel.type, {
                                 useState: () => [true, () => true]
-                            })(panel.props.children.props);
+                            })(panel.props?.children?.props || panel.props);
 
                             return storeResult;
                         }
                     }
-                ]
+                ];
             }, [isAddonStoreEnabled]);
 
             const pluginSection = React.useMemo(() => {
@@ -1460,13 +1604,16 @@ module.exports = (meta) => {
                     element: () => {
                         const panel = sections[4].element();
 
-                        const res = Utils.wrapInHooks(panel.props.children.type, {
+                        const res = Utils.wrapInHooks(panel.props?.children?.type || panel.type, {
                             useState: () => [false, () => false]
-                        })(panel.props.children.props);
+                        })(panel.props?.children?.props || panel.props);
+
+                        AddonPage._ ??= res.props.children.type;
+                        res.props.children.type = AddonPage;
 
                         return res;
                     }
-                }
+                };
             });
             const themeSection = React.useMemo(() => {
                 return {
@@ -1475,13 +1622,16 @@ module.exports = (meta) => {
                     element: () => {
                         const panel = sections[5].element();
 
-                        const res = Utils.wrapInHooks(panel.props.children.type, {
+                        const res = Utils.wrapInHooks(panel.props?.children?.type || panel.type, {
                             useState: () => [false, () => false]
-                        })(panel.props.children.props);
+                        })(panel.props?.children?.props || panel.props);
+
+                        AddonPage._ ??= res.props.children.type;
+                        res.props.children.type = AddonPage;
 
                         return res;
                     }
-                }
+                };
             });
 
             return h(layerContext.Provider, {
@@ -1504,8 +1654,8 @@ module.exports = (meta) => {
                 })
             });
         }
-        
-        const BetterDiscordComponent = createUpdatableComponent(BetterDiscord, "BetterDiscord");
+
+        const BetterDiscordComponent = createUpdatableComponent(BetterDiscord, "BetterDiscord", true);
 
         doggy.openBetterDiscordLayer = () => {
             LayerManager.push(() => h(BetterDiscordComponent));
@@ -1546,7 +1696,7 @@ module.exports = (meta) => {
             });
         }
 
-        const userAvatarSection = Webpack.getByPrototypeKeys("renderAvatarWithPopout", "isCopiedStreakGodlike", { searchExports: true });
+        const userAvatarSection = Webpack.getByPrototypeKeys("renderAvatarWithPopout", "isCopiedStreakGodlike", {searchExports: true});
         const PanelButton = Webpack.getBySource(".plateMuted]", ".orangeGlow]").Z;
 
         const map = new WeakMap();
@@ -1597,6 +1747,7 @@ module.exports = (meta) => {
 
                 .bd-animated-logo svg :first-child {
                     animation: bd-spinner-small 1s cubic-bezier(.4, 0, 0, 1) -.05s 1;
+                    color: #3a71c1;
                 }
                 .bd-animated-logo svg :last-child {
                     animation: bd-spinner-small 1s ease 1;
@@ -1628,6 +1779,7 @@ module.exports = (meta) => {
                 return h(PanelButton, {
                     tooltipText: "BetterDiscord",
                     onClick: doggy.openBetterDiscordLayer,
+                    onContextMenu: openBetterDiscordMenu,
                     onMouseEnter: m => setHovering(true),
                     onMouseLeave: m => setHovering(false),
                     className: isHovering && "bd-animated-logo",
@@ -1660,7 +1812,7 @@ module.exports = (meta) => {
 
                         let newType = map.get(controls.type);
                         if (!newType) {
-                            const { type } = controls;
+                            const {type} = controls;
 
                             function Controls(props) {
                                 const result = type(props);
@@ -1681,6 +1833,14 @@ module.exports = (meta) => {
                 });
             });
 
+            Patcher.after(SettingsView.prototype, "getPredicateSections", (that, args, res) => {
+                if (!Array.isArray(res) || that.props.title === "BetterDiscord") return;
+
+                const index = res.findIndex(m => m.className === "bd-settings-tab");
+                if (index !== -1) {
+                    res.splice(index - 1, 7);
+                }
+            });
             // Patcher.before(AdvancedScrollerNone, "render", (that, [props]) => {
             //     const index = props.children.findIndex((child) => React.isValidElement(child) ? topSectionFilter(child.type) : false);
 
@@ -1693,7 +1853,7 @@ module.exports = (meta) => {
             //                 const result = type(props);
 
             //                 const index = result.props.children.findIndex(m => dmsFilter(m?.type));
-                            
+
             //                 if (~index) {
             //                     result.props.children.splice(index, 0, h(DashboardButton));
             //                 }
@@ -1703,11 +1863,11 @@ module.exports = (meta) => {
 
             //                 return result;
             //             }
-                        
+
             //             map.set(type, newType);
             //             map.set(newType, newType);
             //         }
-                    
+
             //         props.children[index].type = newType;
             //     }
             //     else {
@@ -1718,7 +1878,7 @@ module.exports = (meta) => {
         });
     });
 
-    iife(() => {
+    call(() => {
         onStart(() => {
             CSS.addStyle(`
                 h3.${Webpack.getByKeys("membersGroup").membersGroup}:has(svg) {
@@ -1730,7 +1890,42 @@ module.exports = (meta) => {
         });
     });
 
-    iife(() => {
+    call(() => {
+        // const app = appMount();
+
+        // const reactContainer = app[Object.keys(app).find(m => m.startsWith("__reactContainer$"))];
+
+        // const tree = [];
+
+        // const hasSeen = new WeakSet();
+        // function handleFiber(fiber, currentTree) {
+        //     if (hasSeen.has(fiber)) return;
+        //     hasSeen.add(fiber);
+
+        //     if (fiber.sibling) {
+        //         handleFiber(fiber, currentTree);
+        //     }
+
+        //     const children = [];
+
+        //     if (fiber.child) {
+        //         handleFiber(fiber.child, children);
+        //     }
+
+        //     currentTree.push(
+        //         {
+        //             fiber, type: fiber.type, memoizedProps: fiber.memoizedProps, children
+        //         }
+        //     );
+        // }
+
+        // handleFiber(reactContainer.child, tree);
+
+        // console.log(window.__tree = tree);
+        
+    });
+
+    call(() => {
         // https://github.com/GooseMod/OpenAsar/blob/e88eebf440866a06f3eca3b4fe2a8cc07818ee61/src/mainWindow.js#L98
 
         onStart(() => {
@@ -1745,7 +1940,7 @@ module.exports = (meta) => {
 
                 return original.apply(that, args);
             });
-        })
+        });
     });
 
     function experimentPlugin(experimentId, bucket) {
@@ -1758,7 +1953,7 @@ module.exports = (meta) => {
 
                 Patcher.instead(node.actionHandler, "OVERLAY_INITIALIZE", (that, args, original) => {
                     original({
-                        user: { flags: 1 },
+                        user: {flags: 1},
                         serializedExperimentStore: Webpack.Stores.ExperimentStore.getSerializedState()
                     });
                 });
@@ -1802,17 +1997,103 @@ module.exports = (meta) => {
                 return ret;
             }
         });
-    } 
+    }
 
     // experimentPlugin("2021-09_favorites_server", 3);
     // experimentPlugin("2024-05_desktop_visual_refresh", -1);
 
-    iife(() => {
-        const [module, key] = Webpack.getWithKey(Webpack.Filters.byStrings(".PlatformTypes.WINDOWS", "leading:"), {
-            target: Webpack.getBySource("data-windows")
+//     call(() => {
+//         const [module, key] = Webpack.getWithKey(Webpack.Filters.byStrings(".PlatformTypes.WINDOWS", "leading:"), {
+//             target: Webpack.getBySource("data-windows")
+//         });
+
+//         const ToolbarModule = Webpack.getModule(Webpack.Filters.combine(Webpack.Filters.byKeys("Icon", "Divider"), Webpack.Filters.byStrings("section")), {raw: true}).exports;
+
+//         const [access, set, onChange] = Utils.createState(window.doggy?.__headerBar);
+
+//         onChange((value) => {
+//             window.doggy.__headerBar = value;
+//         });
+
+//         const VOIDTYPE = () => {};
+//         onStart(() => {
+//             Patcher.after(module, key, (that, [props], res) => {
+//                 if (props.windowKey) {
+//                     return;
+//                 }
+
+//                 set(() => res.props.children[2]);
+
+//                 if (BdApi.Plugins.isEnabled("Affinities.plugin.js")) {
+//                     res.type = VOIDTYPE;
+//                     return res;
+//                 }
+
+//                 return null;
+//             });
+
+//             Patcher.before(ToolbarModule, "ZP", (that, [props]) => {
+//                 const children = [];
+//                 const value = access();
+
+//                 const isOk = React.isValidElement(value) && Array.isArray(value.props.children);
+//                 let index = -1;
+//                 if (isOk) {
+//                     index = value.props.children.findIndex((child) => React.isValidElement(child) && "windowKey" in child.props);
+//                 }
+
+//                 if (index !== -1) {
+//                     const before = value.props.children.slice(0, index);
+//                     const after = value.props.children.slice(index);
+
+//                     props.toolbar = [
+//                         props.toolbar,
+//                         before,
+//                         children,
+//                         after
+//                     ];
+//                 }
+//                 else {
+//                     props.toolbar = [
+//                         props.toolbar,
+//                         children,
+//                         value
+//                     ];
+//                 }
+
+//                 props.toolbar.props = {
+//                     children
+//                 };
+//             });
+
+//             CSS.addStyle(
+//                 `
+// .visual-refresh .${Webpack.getByKeys("base", "sidebar").base} {
+//     display: grid;
+//     grid-template-columns: [start] min-content [guildsEnd] min-content [channelsEnd] 1fr [end];
+//     grid-template-rows: [titleBarEnd] min-content [noticeEnd] 1fr [end];
+//     grid-template-areas:
+//         "guildsList notice notice"
+//         "guildsList channelsList page"
+// }
+
+// body:not(.bd-frame) section.title_f75fb0 {
+//     -webkit-app-region: drag;
+// }`
+//             );
+//         });
+//     });
+    call(() => {
+        const titleBarModule = Webpack.getBySource(".PlatformTypes.WINDOWS", ".systemBar");
+
+        const [, mainTitleBar] = Webpack.getWithKey(Webpack.Filters.byStrings(".PlatformTypes.WINDOWS", "leading:"), {
+            target: titleBarModule
+        });
+        const [, systemBar] = Webpack.getWithKey(Webpack.Filters.byStrings(".systemBar"), {
+            target: titleBarModule
         });
 
-        const ToolbarModule = Webpack.getModule(Webpack.Filters.combine(Webpack.Filters.byKeys("Icon", "Divider"), Webpack.Filters.byStrings("section")), { raw: true }).exports;
+        const ToolbarModule = Webpack.getModule(Webpack.Filters.combine(Webpack.Filters.byKeys("Icon", "Divider"), Webpack.Filters.byStrings("section")), {raw: true}).exports;
 
         const [access, set, onChange] = Utils.createState(window.doggy?.__headerBar);
 
@@ -1820,21 +2101,108 @@ module.exports = (meta) => {
             window.doggy.__headerBar = value;
         });
 
-        const VOIDTYPE = () => {};
-        onStart(() => {
-            Patcher.after(module, key, (that, [props], res) => {
+        function getTime() {
+            return new Date().toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "numeric",
+                hour12: true
+            });
+        }
+
+        const MAX_BATTERY_PERCENT = 0.8;
+        const MIN_BATTERY_PERCENT = 0.05;
+
+        const TRUE_BATTERY_MAX = MAX_BATTERY_PERCENT - MIN_BATTERY_PERCENT;
+
+        function Battery() {
+            const [battery, setBattery] = useState(() => ({ level: 0, charging: false, exists: false }));
+            const [hoveringOverBatter, setHoveringOverBattery] = useState(false);
+
+            React.useInsertionEffect(() => {
+                let undo;
+                (async () => {
+                    if (!navigator.getBattery) return;
+
+                    let battery = await navigator.getBattery();
+
+                    function updateBattery() {
+                        setBattery({
+                            level: battery.level,
+                            charging: battery.charging,
+                            exists: true
+                        });
+                    }
+
+                    battery.addEventListener("chargingchange", updateBattery);
+                    battery.addEventListener("levelchange", updateBattery);
+
+                    updateBattery();
+
+                    undo = () => {
+                        battery.removeEventListener("chargingchange", updateBattery);
+                        battery.removeEventListener("levelchange", updateBattery);
+                    }
+                })();
+                return () => undo();
+            }, []);
+
+            const level = (hoveringOverBatter ? battery.level : (battery.level - MIN_BATTERY_PERCENT) / TRUE_BATTERY_MAX) * 100;
+
+            return battery.exists && h("div", { 
+                id: "battery", 
+                "data-level": level <= 25 ? "low" : "ok",
+                onMouseOver: () => setHoveringOverBattery(true), 
+                onMouseLeave: () => setHoveringOverBattery(false),
+                children: [
+                    h("div", {}, `${level.toFixed(0)}%`),
+                    battery.charging && h("svg", {
+                        viewBox: "0 0 24 24",
+                        width: 16,
+                        height: 16,
+                        children: h("path", {
+                            d: "M7.65 21.75a1 1 0 0 0 1.64.96l11.24-9.96a1 1 0 0 0-.66-1.75h-4.81a.5.5 0 0 1-.5-.6l1.79-8.15a1 1 0 0 0-1.64-.96L3.47 11.25A1 1 0 0 0 4.13 13h4.81c.32 0 .56.3.5.6l-1.79 8.15Z",
+                            fill: "currentColor"
+                        })
+                    })
+                ]
+            });
+        }
+
+        function Clock() {
+            const [time, setTime] = useState(() => getTime());
+
+            useLayoutEffect(() => {
+                setTime(getTime);
+
+                return Utils.requestAnimationFrames(() => setTime(getTime));
+            }, []);
+
+            return h("div", { id: "clock" }, time);
+        }
+
+        onStart(() => {            
+            // Patcher.after(titleBarModule, systemBar, (that, args, res) => {
+            //     res.props.children.props.children = [
+            //         (Storage.use("misc")["battery"] ?? true) && h(Battery),
+            //         res.props.children.props.children
+            //     ]
+            // });
+
+            Patcher.instead(titleBarModule, mainTitleBar, (that, [props], original) => {
+                const battery = false ?? Storage.use("misc")["battery"] ?? false;
+
                 if (props.windowKey) {
-                    return;
-                }
-                        
-                set(() => res.props.children[2]);
-
-                if (BdApi.Plugins.isEnabled("Affinities.plugin.js")) {
-                    res.type = VOIDTYPE;
-                    return res;
+                    return original.call(that, props);
                 }
 
-                return null;
+                set(props.trailing);
+                
+                return original.call(this, {
+                    ...props,
+                    title: null,
+                    short: true,
+                    trailing: battery && h(Battery)
+                })
             });
 
             Patcher.before(ToolbarModule, "ZP", (that, [props]) => {
@@ -1871,26 +2239,76 @@ module.exports = (meta) => {
                 };
             });
 
-            CSS.addStyle(
-                `    
-.visual-refresh .${Webpack.getByKeys("base", "sidebar").base} {
-    display: grid;
-    grid-template-columns: [start] min-content [guildsEnd] min-content [channelsEnd] 1fr [end];
-    grid-template-rows: [titleBarEnd] min-content [noticeEnd] 1fr [end];
-    grid-template-areas:
-        "guildsList notice notice"
-        "guildsList channelsList page"
-}
+            CSS.addStyle(`
+                #clock {
+                    color: var(--text-secondary);
+                    display: flex;
+                    justify-content: center;
+                }
+                #battery {
+                    color: var(--text-secondary);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
 
-body:not(.bd-frame) section.title_f75fb0 {
-    -webkit-app-region: drag;
-}`
-            );
+                    &[data-level="low"] {
+                        color: var(--text-danger);
+                    }
+
+                    svg {
+                        color: var(--yellow-new-28);
+                    }
+                }
+
+                .bd-frame { --custom-app-top-bar-height: 0 }
+            `);
         });
     });
 
-    iife(() => {
-        const Messages = Webpack.getByStrings("SUMMARIES_UNREAD_BAR_VIEWED,{num_unread_summaries:", { defaultExport: false });
+    call(() => {
+        const userMention = Webpack.getByStrings(".USER_MENTION)", ".getUser(", { defaultExport: false });
+        const mention = Webpack.getByStrings(",interactive:", 'roleStyle:"username",', { defaultExport: false });
+
+        const ctx = React.createContext();
+        
+        onStart(() => {
+            Patcher.after(userMention, "Z", (that, [props], res) => {
+                const user = Webpack.Stores.UserStore.getUser(props.userId);
+
+                if (!user) return;
+
+                return h(ctx.Provider, { value: user }, res.props.children);
+            });
+
+            Patcher.after(mention, "Z", (that, [props], res) => {
+                const user = React.useContext(ctx);
+
+                if (!user) return;                
+
+                return React.cloneElement(res, {
+                    children: [
+                        h("img", {
+                            src: user.getAvatarURL(),
+                            style: {
+                                width: 17,
+                                height: 17,
+                                margin: "0 2px -3px 1px",
+                                borderRadius: "50%"
+                            }
+                        }),
+                        res.props.children
+                    ]
+                })
+            });
+        });
+    });
+
+    call(() => {
+        
+    });
+
+    call(() => {
+        const Messages = Webpack.getByStrings("SUMMARIES_UNREAD_BAR_VIEWED,{num_unread_summaries:", {defaultExport: false});
 
         let MessageType = window.doggy?.__MessageType;
         onStart(() => {
@@ -1904,7 +2322,7 @@ body:not(.bd-frame) section.title_f75fb0 {
 
                     li.props["data-group-end"] = props.__db.last;
                     li.props["data-group-start"] = props.__db.first;
-                    li.props.className = `messageListItem ${li.props.className}`;                    
+                    li.props.className = `messageListItem ${li.props.className}`;
 
                     if (typeof props.message?.author?.id === "string") {
                         li.props["data-group-author-id"] = props.message.author.id;
@@ -1942,7 +2360,7 @@ body:not(.bd-frame) section.title_f75fb0 {
                     if (!next) last = true;
                     else if (element.props.groupId !== next.props.groupId) last = true;
 
-                    element.props.__db = { last, first };
+                    element.props.__db = {last, first};
                 }
 
                 if (typeof MessageType === "undefined") {
@@ -2002,13 +2420,13 @@ body:not(.bd-frame) section.title_f75fb0 {
                 .welcomeCTA_f5d1e2 {
                     display: none;
                 }
-            `)
+            `);
         });
     });
 
-    iife(() => {
+    call(() => {
         return;
-        
+
         const header = BdApi.Webpack.getModule(m => String(m.type).includes("data-has-banner"));
 
         onStart(() => {
@@ -2025,7 +2443,7 @@ body:not(.bd-frame) section.title_f75fb0 {
                                     onClick: (e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        
+
                                         document.body.toggleAttribute("data-sidebar-collapsed");
                                     },
                                     children: [
@@ -2043,11 +2461,11 @@ body:not(.bd-frame) section.title_f75fb0 {
                                 })
                             );
                         }
-                        
+
 
                         return ret;
                     }
-                })
+                });
             });
 
             CSS.addStyle(`
@@ -2081,13 +2499,13 @@ body:not(.bd-frame) section.title_f75fb0 {
                 [data-sidebar-collapsed] div[class^=avatarWrapper_] + div[class^=buttons_] {
                     display: none;
                 }
-            `)
+            `);
         });
     });
 
-    iife(() => {
+    call(() => {
         const [module, key] = Webpack.getWithKey(Filters.byStrings(".roleStyle);return(", "{roleStyle:"), {
-            target: Webpack.getBySource(".roleStyle);return(", "{roleStyle:", { searchDefault: false })
+            target: Webpack.getBySource(".roleStyle);return(", "{roleStyle:", {searchDefault: false})
         });
 
         const shouldAnimate = (existing) => {
@@ -2099,27 +2517,29 @@ body:not(.bd-frame) section.title_f75fb0 {
             }
 
             return true;
-        }
+        };
 
         onStart(() => {
             Patcher.before(module, key, (that, [props]) => {
+                if (!props) return;
+                
                 props.animateRoleGradient = shouldAnimate(props.animateRoleGradient);
             });
 
-            Patcher.after(Webpack.getByStrings(".zalgo]:", ".compact]:", { defaultExport: false }), "Z", (that, args, res) => {
+            Patcher.after(Webpack.getByStrings(".zalgo]:", ".compact]:", {defaultExport: false}), "Z", (that, args, res) => {
                 res.props.value.animate = shouldAnimate(res.props.value.animate);
             });
         });
     });
 
-    var amdRequire;(function() {
+    var amdRequire; (function () {
         const commonjs = window.require;
         AMDLoader.init();
         amdRequire = window.require;
         window.require = commonjs;
     })();
 
-    iife(() => {
+    call(() => {
         return;
         const {promise, resolve} = Promise.withResolvers();
 
@@ -2134,13 +2554,13 @@ body:not(.bd-frame) section.title_f75fb0 {
             }
 
             ref = createRef();
-            state = { loaded: false };
+            state = {loaded: false};
 
             componentDidMount() {
                 promise.then((m) => this.onResolve(m));
 
                 this.onStop = onStop(() => {
-                    this.setState({ disabled: true });
+                    this.setState({disabled: true});
                 });
             }
             componentWillUnmount() {
@@ -2150,8 +2570,8 @@ body:not(.bd-frame) section.title_f75fb0 {
             }
 
             onResolve(monaco) {
-                this.setState({ loaded: true });
-                
+                this.setState({loaded: true});
+
                 let lang = this.props.lang.toLowerCase();
                 switch (lang) {
                     case "js":
@@ -2166,7 +2586,7 @@ body:not(.bd-frame) section.title_f75fb0 {
                         lang = "python";
                         break;
                 }
-                
+
                 this.editor = monaco.editor.create(this.ref.current, {
                     readOnly: true,
                     language: lang,
@@ -2177,7 +2597,7 @@ body:not(.bd-frame) section.title_f75fb0 {
 
                 // autoresize
                 const resize = () => {
-                    const height = this.editor.getContentHeight();                    
+                    const height = this.editor.getContentHeight();
                     this.ref.current.style.height = `calc(${Math.min(Math.max(height, 15 * 3), 400)}px + 1rem)`;
                     this.editor.layout();
                 };
@@ -2198,12 +2618,12 @@ body:not(.bd-frame) section.title_f75fb0 {
             Patcher.after(SimpleMarkdownWrapper.defaultRules.codeBlock, "react", (instance, [props, _, {key}], children) => {
                 return (
                     h(MonacoEditor, {key, ...props, children})
-                )
+                );
             });
         });
     });
 
-    iife(() => {
+    call(() => {
         const ModuleActions = Webpack.getMangled("onCloseRequest:null!=", {
             openModal: Filters.byStrings("onCloseRequest:null!="),
             closeModal: Filters.byStrings(".setState", ".getState()[")
@@ -2219,77 +2639,163 @@ body:not(.bd-frame) section.title_f75fb0 {
 
                     console.log(args);
                 }
-                
+
                 return Reflect.apply(original, that, args);
             });
         });
     });
 
-    iife(() => {
-        onStart(Utils.forceUpdateApp);
-        onStop(Utils.forceUpdateApp);
+    call(() => {
+        // onStart(Utils.forceUpdateApp);
+        // onStop(Utils.forceUpdateApp);
     });
 
-    iife(() => {
-        window.doggy.killUpdater?.();
-
-        const [abort, getSignal] = Utils.createAbort();
-        window.doggy.killUpdater = () => abort();
-
-        onStart(() => {
-            async function fetchUpdate() {
-                const signal = getSignal();
-
-                const request = await fetch("https://raw.githubusercontent.com/doggybootsy/BDPlugins/refs/heads/main/0doggy/0doggy.plugin.js", { signal });
-                const text = await request.text();
-
-                if (signal.aborted) ret;
-
-                const match = text.match(/@version\s+(\d+\.\d+\.\d+)/);
-                
-                let hasUpdate = false;
-                if (!match) hasUpdate = true;
-                else hasUpdate = Utils.semverCompare(meta.version, match[1]) === 1;
-
-                if (hasUpdate) {
-                    UI.showNotification({
-                        id: "doggy::updater",
-                        title: "Update Ready",
-                        content: "0doggy.plugin.js has a update ready",
-                        type: "info",
-                        actions: [{
-                            label: "Update",
-                            onClick: () => require("fs").writeFileSync(__filename, text)
-                        }],
-                    })
-                }
+    class UpdaterStore {
+        static {
+            if (!doggy.Updater) {
+                doggy.Updater = new this();
             }
 
-            const interval = setInterval(() => fetchUpdate(), 1000 * 60 * 60);
+            doggy.Updater.currentVersion = meta.version;
 
-            onStop(() => clearInterval(interval));
-        });
+            /** @type {UpdaterStore} */
+            this.instance = doggy.Updater;
+        }
 
-        onStop(abort);
-    });
+        constructor() {
+            const [abort, getSignal] = Utils.createAbort();
 
-    iife(() => {
+            this.#abort = abort;
+            this.#getSignal = getSignal;
+
+            onStart(() => {
+                this.checkForUpdate();
+
+                const id = setInterval(() => this.checkForUpdate(), 1000 * 60 * 60);
+
+                onStop(() => clearInterval(id));
+            });
+
+            const [access, set] = Utils.createState(this.getState());
+            this.access = access;
+            this.#set = set;
+        }
+
+        access = this.getState;
+        #set;
+
+        currentVersion = meta.version;
+
+        #abort;
+        #getSignal;
+
+        #loading = true;
+        #didError = false;
+        #hasUpdate = false;
+
+        #latestVersion;
+        #file;
+
+        #updateURL = "https://raw.githubusercontent.com/doggybootsy/BDPlugins/refs/heads/main/0doggy/0doggy.plugin.js";
+
+        getState() {
+            return {
+                loading: this.#loading,
+                didError: this.#didError,
+                hasUpdate: this.#hasUpdate,
+                latestVersion: this.#latestVersion
+            }
+        }
+
+        kill() {
+            this.#loading = false;
+            this.#didError = true;
+            this.#hasUpdate = false;
+            this.#latestVersion = "?.?.?";
+
+            this.#set(this.getState());
+
+            this.#abort("Updater Killed!");
+        }
+        
+        update() {
+            if (!this.#file) return;
+            require("fs").writeFileSync(__filename, this.#file);
+        }
+
+        async checkForUpdate() {
+            this.kill();
+
+            const signal = this.#getSignal();
+
+            this.#loading = true;
+            this.#didError = false;
+            this.#hasUpdate = false;
+            this.#latestVersion = "?.?.?";
+
+            this.#set(this.getState());
+
+            const request = await fetch(this.#updateURL, {
+                signal,
+                cache: "no-cache",
+                window: null
+            });
+            const text = this.#file = await request.text();
+
+            if (signal.aborted) return;
+
+            const match = text.match(/@version\s+(\d+\.\d+\.\d+)/);            
+
+            let hasUpdate = false;
+            if (!match) hasUpdate = true;
+            else hasUpdate = Utils.semverCompare(this.currentVersion, match[1]) === 1;
+
+            this.#latestVersion = match?.[1] || "?.?.?";
+
+            this.#loading = false;
+            this.#didError = false;
+            this.#hasUpdate = hasUpdate;
+
+            this.#set(this.getState());
+
+            if (hasUpdate) {
+                UI.showNotification({
+                    id: "doggy::updater",
+                    title: "Update Ready",
+                    content: "0doggy.plugin.js has a update ready",
+                    type: "info",
+                    actions: [{
+                        label: "Update",
+                        onClick: () => require("fs").writeFileSync(__filename, text)
+                    }],
+                });
+            }
+        }
+    }
+
+    call(() => {
         const MessageQueue = Webpack.getByKeys("enqueue", "logger");
 
         onStart(() => {
             Patcher.before(MessageQueue, "enqueue", (that, args) => {
-                if (!args[0]?.message?.content) return;                
+                if (!args[0]?.message?.content) return;
 
                 args[0].message.content = args[0].message.content.replace(
                     /(https?:\/\/)(x|twitter|fxtwitter)(\.com\/\w+\/status\/\d+)/gmi,
                     "$1fxtwitter$3"
+                ).replace(
+                    /(?:https?:\/\/)github\.com\/(\w+\/\w+)\/(pull|issues)\/(\d+)/gmi,
+                    "[$1#$3](<https://github.com/$1/$2/$3>)"
+                ).replace(
+                    /(?:https?:\/\/)issues\.chromium\.org\/issues\/(\d+)/gmi,
+                    "[crbug/$1](<https://issues.chromium.org/issues/$1>)"
                 );
             });
         });
     });
 
-    iife(() => {
-        const UserProfile = Webpack.getByStrings("switch-accounts", "PRESS_SWITCH_ACCOUNTS", { defaultExport: false });
+    call(() => {
+        const UserProfile = Webpack.getByStrings("switch-accounts", "PRESS_SWITCH_ACCOUNTS", {defaultExport: false});
 
         onStart(() => {
             CSS.addStyle("#account-panel-user-info :where(.avatar__75742) {\
@@ -2308,16 +2814,16 @@ body:not(.bd-frame) section.title_f75fb0 {
     --custom-user-profile-banner-height: 105px;\
 }\
 #account-panel svg[width='12'] {width: 14px!important;height: 14px!important; padding: 2px}");
-            
-            Patcher.after(UserProfile, "Z", (that, [props], res) => {                
+
+            Patcher.after(UserProfile, "Z", (that, [props], res) => {
                 const uap = Storage.use("user-action-profile");
 
                 const header = Utils.findInReactTree(res, r => String(r?.props?.className).startsWith("header_"));
                 const menus = Utils.findInReactTree(res, r => String(r?.className).startsWith("menus_"));
-                
+
                 const statusPicker = Utils.findInReactTree(menus, m => m?.props?.id === "set-status");
                 const accountSwitcher = Utils.findInReactTree(menus, m => m?.props?.id === "switch-accounts");
-                const copyUid = Utils.findInReactTree(menus, m => m?.props?.id === "copy-user-id");      
+                const copyUid = Utils.findInReactTree(menus, m => m?.props?.id === "copy-user-id");
 
                 const menu = h(ContextMenu.Menu, {
                     navId: "account-panel",
@@ -2328,7 +2834,7 @@ body:not(.bd-frame) section.title_f75fb0 {
                             id: "user-info"
                         }),
                         h(ContextMenu.Item, {
-                            render: () => h("div", { style: { margin: 4 }}),
+                            render: () => h("div", {style: {margin: 4}}),
                             id: "user-spacer"
                         }),
                         uap["mini-status"] ? h(ContextMenu.Item, {
@@ -2371,7 +2877,7 @@ body:not(.bd-frame) section.title_f75fb0 {
                         copyUid && [
                             h(ContextMenu.Separator),
                             h(ContextMenu.Item, {
-                                ...copyUid.props, 
+                                ...copyUid.props,
                                 icon: null,
                                 label: h("div", {
                                     style: {
@@ -2395,7 +2901,7 @@ body:not(.bd-frame) section.title_f75fb0 {
         });
     });
 
-    return (function() {
+    return (function () {
         window.doggy.Storage = Storage;
 
         window.doggy.Utils = Utils;
@@ -2412,17 +2918,17 @@ body:not(.bd-frame) section.title_f75fb0 {
 
             componentDidMount() {
                 window.doggy.setSettings = (Settings) => {
-                    this.setState({ Settings });
+                    this.setState({Settings});
 
                     UpdatableSettings.prototype.state.Settings = Settings;
-                }
+                };
 
                 const fiber = Utils.getInternalInstance(this.ref.current);
-                
+
                 if (!fiber) return;
 
-                const { memoizedProps } = Utils.findInTree(fiber, (fiber) => fiber?.memoizedProps?.onClose, {
-                    walkable: [ "return" ]
+                const {memoizedProps} = Utils.findInTree(fiber, (fiber) => fiber?.memoizedProps?.onClose, {
+                    walkable: ["return"]
                 });
 
                 this.onClose = memoizedProps.onClose;
@@ -2431,19 +2937,19 @@ body:not(.bd-frame) section.title_f75fb0 {
 
             onClose = () => {
                 this.close = true;
-            }
+            };
 
             componentWillUnmount() {
                 delete window.doggy.setSettings;
             }
 
             render() {
-                return h("div", { ref: this.ref }, h(this.state.Settings, { onClose: () => this.onClose() }));
+                return h("div", {ref: this.ref}, h(this.state.Settings, {onClose: () => this.onClose()}));
             }
         }
 
-        UpdatableSettings.prototype.state = { Settings };
-        
+        UpdatableSettings.prototype.state = {Settings};
+
         window.doggy.instance = {
             start() {
                 for (const element of onStart._callbacks) {
@@ -2461,8 +2967,8 @@ body:not(.bd-frame) section.title_f75fb0 {
             getSettingsPanel() {
                 return h(UpdatableSettings);
             }
-        }
+        };
 
-        return window.doggy.plugin ??= new Proxy(window.doggy.instance, Object.fromEntries(Reflect.ownKeys(Reflect).map((key) => [ key, (t, ...args) => Reflect[key](window.doggy.instance, ...args) ])));
+        return window.doggy.plugin ??= new Proxy(window.doggy.instance, Object.fromEntries(Reflect.ownKeys(Reflect).map((key) => [key, (t, ...args) => Reflect[key](window.doggy.instance, ...args)])));
     })();
-}
+};
