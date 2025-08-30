@@ -2,7 +2,7 @@
  * @name SendAndForget
  * @description Don't follow forwarded messages after sending them. Port of [Vendicated/Vencord#3558](<https://github.com/Vendicated/Vencord/pull/3558>)
  * @author DoggyBootsy
- * @version 1.0.1
+ * @version 1.0.2
  */
 
 /** @type {import("betterdiscord").PluginCallback} */
@@ -12,9 +12,9 @@ module.exports = (meta) => {
 	const ForwardModalCTX = React.createContext();
 
 	class SendAndForget {
-		patchForwardModal() {
+		async patchForwardModal() {
 			const [ module, key ] = Webpack.getWithKey(m => typeof m === "function", {
-				target: Webpack.getBySource(".ToastType.FORWARD")
+				target: await Webpack.waitForModule(Webpack.Filters.bySource(".ToastType.FORWARD"))
 			});			
 			
 			Patcher.instead(module, key, (that, args, original) => {
@@ -60,8 +60,10 @@ module.exports = (meta) => {
 			});
 		}
 
-		patchForwardModalFooter() {
-			const [ module, key ] = Webpack.getWithKey(Webpack.Filters.byStrings(".ForwardContextMessage", ".footerWarningWrapper"));
+		async patchForwardModalFooter() {
+			const [ module, key ] = Webpack.getWithKey(Webpack.Filters.byStrings(".ForwardContextMessage", ".footerWarningWrapper"), {
+				target: await Webpack.waitForModule(Webpack.Filters.bySource(".ForwardContextMessage", ".footerWarningWrapper"))
+			});
 
 			let SwitchItem = Webpack.getBySource("M5.13231 6.72963L6.7233 5.13864L14.855 13.2704L13.264 14.8614L5.13231 6.72963Z");
 			if (typeof SwitchItem === "object") SwitchItem = Object.values(SwitchItem)[0];
