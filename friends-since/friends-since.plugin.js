@@ -2,213 +2,126 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.8
+ * @version 1.0.9
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
-// @ts-check
-
 /** @type {import("betterdiscord").PluginCallback} */
 module.exports = (meta) => {
-  /** @type {[ (reason?: any) => void, () => AbortSignal ]} */
-  const [ abort, getSignal ] = (function() {
-    let controller = new AbortController();
-  
-    /** @type {(reason?: any) => void} */
-    function abort(reason) {
-      controller.abort(reason);
-      controller = new AbortController();
-    }
-  
-    return [ abort, () => controller.signal ];
-  })();
+	const {Patcher, Webpack, Utils, React} = new BdApi(meta.name);
 
-  let Text = BdApi.Webpack.getBySource("data-text-variant", "=\"div\",selectable:", { defaultExport: false });
-  if (!Text.render) Text = Object.values(Text)[0];
+	const h = React.createElement;
 
-  const RelationshipStore = BdApi.Webpack.getStore("RelationshipStore");
-  
-  const {intl} = BdApi.Webpack.getMangled(".IntlManager(", {
-    intl: m => m?.currentLocale
-});
-  
-  function getMessage() {
-    switch (intl.currentLocale) {
-      default: return "Friends Since";
-    }
-  }
+	const UserProfileModalV2 = Webpack.getByStrings("UserProfileModalV2", "MODAL_V2", "USER_PROFILE_MODAL_V2", { defaultExport: false })
 
-  let Section;
-  
-  class FriendsSince extends BdApi.React.Component {
-    constructor(props) {
-      super(props);
+	function findInReactTree(tree, filter) {
+		return Utils.findInTree(tree, filter, { walkable: ["props", "children"] });
+	}
 
-      this.listener = this.listener.bind(this);
-      this.listener();
-    }
+	function getCreatedAt(value, lang) {
+		if (null == value || "" === value) return null;
+		const data = new Date(value);
+		return !(data instanceof Date) || isNaN(data.getTime()) ? null : data.toLocaleDateString(lang, {
+			month: "short",
+			day: "numeric",
+			year: "numeric"
+		});
+	}
 
-    state = { hasError: false };
-  
-    /** @type {string | null} */
-    since = null;
+	let useStateFromStores = (stores, cb) => cb();
+	{
+		const mangled = Webpack.getMangled(m => m.Store, {useStateFromStores: BdApi.Webpack.Filters.byStrings("useStateFromStores")}, { raw: true });
 
-    listener() {
-      try {
-        const old = this.since;
-  
-        const since = RelationshipStore.getSince(this.props.userId);
-    
-        if (since && RelationshipStore.isFriend(this.props.userId)) {
-          const date = new Date(since);
-          this.since = !(date instanceof Date) || isNaN(date.getTime()) ? null : date.toLocaleDateString(intl.currentLocale, {
-            month: "short",
-            day: "numeric",
-            year: "numeric"
-          });
-        }
-        else this.since = null;
-  
-        if (old !== this.since) this.forceUpdate();
-      } catch (error) {
-        console.log(error);
-        
-        this.setState({ hasError: true });
-      }
-    }
+		useStateFromStores = mangled.useStateFromStores ?? useStateFromStores;
+	}
 
-    componentWillUnmount() {
-      RelationshipStore.addChangeListener(this.listener);
-    }
-    componentDidMount() {
-      RelationshipStore.removeChangeListener(this.listener);
-    }
+	const Section = Webpack.getByStrings(".section", "text-xs/medium", "headingColor");
+	const Text = ((Text) => typeof Text.render === "function" ? Text : Object.values(Text)[0])(Webpack.getBySource("data-text-variant"));
 
-    componentDidCatch() {      
-      this.setState({
-        hasError: true
-      });
-    }
+	const RelationshipStore = Webpack.getStore("RelationshipStore");
+	const LocaleStore = Webpack.getStore("LocaleStore");
 
-    static getDerivedStateFromError(error) {
-      return { hasError: true };
-    }
+	function useHeading(locale) {
+		return React.useMemo(() => {
+			switch (locale) {
+				case "da": return "Venner siden";
+				case "de": return "Freunde seit";
+				case "en-GB": return "Friends since";
+				case "en-US": return "Friends since";
+				case "es-ES": return "Amigos desde";
+				case "es-419": return "Amigos desde";
+				case "fr": return "Amis depuis";
+				case "hr": return "Prijatelji od";
+				case "it": return "Amici dal";
+				case "lt": return "Draugai nuo";
+				case "hu": return "Barátok amióta";
+				case "nl": return "Vrienden sinds";
+				case "no": return "Venner siden";
+				case "pl": return "Znajomi od";
+				case "pt-BR": return "Amigos desde";
+				case "ro": return "Prieteni din";
+				case "fi": return "Ystäviä alkaen";
+				case "sv-SE": return "Vänner sedan";
+				case "vi": return "Bạn bè từ";
+				case "tr": return "Arkadaşlar desde";
+				case "cs": return "Přátelé od";
+				case "el": return "Φίλοι από";
+				case "bg": return "Приятели от";
+				case "ru": return "Друзья с";
+				case "uk": return "Друзі з";
+				case "hi": return "दोस्त तब से";
+				case "th": return "เป็นเพื่อนกันตั้งแต่";
+				case "zh-CN": return "成为好友自";
+				case "ja": return "友達になった日";
+				case "zh-TW": return "成為好友自";
+				case "ko": return "친구가 된 날짜";
+				default: return "Friends since";
+			}
+		}, [locale]);
+	}
 
-    render() {
-      if (this.state.hasError) return BdApi.React.createElement("div", {}, "React Error");
-      if (this.since === null) return null;
+	function FriendsSince({ userId }) {
+		const since = useStateFromStores([RelationshipStore], () => {
+			if (!RelationshipStore.isFriend(userId)) return null;
+			
+			return RelationshipStore.getSince(userId);
+		});
 
-      return BdApi.React.createElement(Section, {
-        heading: getMessage(),
-        headingColor: this.props.sidePanel ? "header-primary" : undefined,
-        children: [
-          BdApi.React.createElement(Text, {
-            variant: "text-sm/normal",
-            children: this.since
-          })
-        ]
-      })
-    }
-  }
+		const locale = useStateFromStores([LocaleStore], () => LocaleStore.locale);
 
-  /** @type {{ Z: Function, ZP: Function, default: React.FunctionComponent<{ user: { id: string } }> }} */
-  let UserModalContent;
-  /**
-   * @param {AbortSignal} signal 
-   */
-  async function patchUserModal(signal) {
-    if (!UserModalContent) {
-      UserModalContent = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings("3fe7U1", "trackUserProfileAction"), { defaultExport: false });
-      
-      if (!("default" in UserModalContent)) {
-        Object.defineProperty(UserModalContent, "default", {
-          get() {
-            return UserModalContent.Z || UserModalContent.ZP;
-          },
-          set(value) {
-            if ("Z" in UserModalContent) UserModalContent.Z = value;
-            if ("ZP" in UserModalContent) UserModalContent.ZP = value;
-          }
-        });
-      };
-    }
+		const time = React.useMemo(() => since && getCreatedAt(since, locale), [since, locale]);
 
-    if (signal.aborted) return;
+		const heading = useHeading(locale);		
 
-    BdApi.Patcher.after("friends-since", UserModalContent, "default", (instance, [ props ], res) => {
-      if (!BdApi.React.isValidElement(res)) return;      
+		if (!time) return null;
 
-      const children = res.props.children;
-      const index = children.findIndex((value) => BdApi.React.isValidElement(value) && "heading" in value.props && BdApi.React.isValidElement(value.props.children) && "tooltipDelay" in value.props.children.props);
+		return h(Section, {
+			heading,
+			children: h(Text, {
+				variant: "text-xs/medium",
+				children: time
+			})
+		})
+	}
 
-      if (~index) {
-        Section = children[index].type;        
-        
-        children.splice(
-          index + 1, 0, 
-          BdApi.React.createElement(FriendsSince, {
-            userId: props.user.id
-          })
-        );
-      }
-    });
-  }
+	return {
+		start() {
+			Patcher.after(UserProfileModalV2, "Z", (_, [props], ret) => {
+				const profileBody = findInReactTree(ret, (e) => e?.className === "profileBody__9c3be");
 
-  /** @type {{ Z: Function, ZP: Function, default: React.FunctionComponent<{ user: { id: string } }> }} */
-  let UserSidePanel;
-  /**
-   * @param {AbortSignal} signal 
-   */
-  async function patchSidePanel(signal) {
-    if (!UserSidePanel) {
-      UserSidePanel = await BdApi.Webpack.waitForModule(BdApi.Webpack.Filters.byStrings("61W33d", "UserProfilePanelBody"), { defaultExport: false });
+				if (!profileBody) return;
 
-      if (!("default" in UserSidePanel)) {
-        Object.defineProperty(UserSidePanel, "default", {
-          get() {
-            return UserSidePanel.Z || UserSidePanel.ZP;
-          },
-          set(value) {
-            if ("Z" in UserSidePanel) UserSidePanel.Z = value;
-            if ("ZP" in UserSidePanel) UserSidePanel.ZP = value;
-          }
-        });
-      };
-    }
+				const index = profileBody.children.findIndex((e) => React.isValidElement(e) && e.props.heading && e.props?.children?.props?.userId);
 
-    if (signal.aborted) return;
-
-    BdApi.Patcher.after("friends-since", UserSidePanel, "default", (instance, [ props, abc ], res) => {
-      if (!BdApi.React.isValidElement(res)) return;
-
-      const background = res.props.children.find((value) => String(value?.props?.className).includes("overlay_"));
-      if (!background) return;
-      
-      const index = background.props.children.findIndex((value) => BdApi.React.isValidElement(value) && "heading" in value.props);
-
-      if (~index) {        
-        Section = background.props.children[index].type;
-        
-        background.props.children.push(
-          // index + 1, 0, 
-          BdApi.React.createElement(FriendsSince, {
-            userId: props.user.id,
-            sidePanel: true
-          })
-        );
-      }
-    });
-  }
-
-  return {
-    start() {
-      const signal = getSignal();
-      patchUserModal(signal);
-      patchSidePanel(signal);
-    }, 
-    stop() {
-      abort();
-      BdApi.Patcher.unpatchAll("friends-since");
-    }
-  };
+				if (index === -1) return;
+				
+				profileBody.children.splice(index + 1, 0,
+					h(FriendsSince, { userId: props.user.id })
+				);
+			});
+		},
+		stop() {
+			Patcher.unpatchAll();
+		}
+	}
 };
