@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.9
+ * @version 1.0.10
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -107,7 +107,7 @@ module.exports = (meta) => {
 	return {
 		start() {
 			Patcher.after(UserProfileModalV2, "Z", (_, [props], ret) => {
-				const profileBody = findInReactTree(ret, (e) => e?.className === "profileBody__9c3be");
+				const profileBody = findInReactTree(ret, (e) => e?.className?.includes("profileBody"));
 
 				if (!profileBody) return;
 
