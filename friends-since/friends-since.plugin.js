@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.10
+ * @version 1.0.11
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -12,7 +12,9 @@ module.exports = (meta) => {
 
 	const h = React.createElement;
 
-	const UserProfileModalV2 = Webpack.getByStrings("UserProfileModalV2", "MODAL_V2", "USER_PROFILE_MODAL_V2", { defaultExport: false })
+	const UserProfileModalV2Promise = Webpack.waitForModule(Webpack.Filters.byStrings("UserProfileModalV2", "MODAL_V2", "USER_PROFILE_MODAL_V2"), {
+		defaultExport: false
+	});
 
 	function findInReactTree(tree, filter) {
 		return Utils.findInTree(tree, filter, { walkable: ["props", "children"] });
@@ -35,8 +37,13 @@ module.exports = (meta) => {
 		useStateFromStores = mangled.useStateFromStores ?? useStateFromStores;
 	}
 
-	const Section = Webpack.getByStrings(".section", "text-xs/medium", "headingColor");
-	const Text = ((Text) => typeof Text.render === "function" ? Text : Object.values(Text)[0])(Webpack.getBySource("data-text-variant"));
+	let Section;
+	let Text;
+
+	UserProfileModalV2Promise.then(() => {
+		Section = Webpack.getByStrings(".section", "text-xs/medium", "headingColor");
+		Text = ((Text) => typeof Text.render === "function" ? Text : Object.values(Text)[0])(Webpack.getBySource("data-text-variant"));
+	});
 
 	const RelationshipStore = Webpack.getStore("RelationshipStore");
 	const LocaleStore = Webpack.getStore("LocaleStore");
@@ -104,10 +111,30 @@ module.exports = (meta) => {
 		})
 	}
 
+	const [race, reject] = (() => {
+		let reject;
+		return [
+			(promise) => Promise.race([
+				promise,
+				{
+					then: (r) => reject = r
+				}
+			]),
+			(reason) => reject(reason)
+		];
+	})();
+
 	return {
-		start() {
+		async start() {
+			const UserProfileModalV2 = await race(UserProfileModalV2Promise);			
+
+			if (!UserProfileModalV2) {
+				BdApi.UI.showToast("FriendsSince failed to load!.", {type: "error"});
+				return;
+			}
+
 			Patcher.after(UserProfileModalV2, "Z", (_, [props], ret) => {
-				const profileBody = findInReactTree(ret, (e) => e?.className?.includes("profileBody"));
+				const profileBody = findInReactTree(ret, (e) => e?.className?.includes("profileBody"));				
 
 				if (!profileBody) return;
 
@@ -121,6 +148,7 @@ module.exports = (meta) => {
 			});
 		},
 		stop() {
+			reject();
 			Patcher.unpatchAll();
 		}
 	}
