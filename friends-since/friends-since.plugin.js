@@ -2,13 +2,12 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.11
+ * @version 1.0.12
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
-/** @type {import("betterdiscord").PluginCallback} */
 module.exports = (meta) => {
-	const {Patcher, Webpack, Utils, React} = new BdApi(meta.name);
+	const {Patcher, Webpack, Utils, React, Hooks, UI} = new BdApi(meta.name);
 
 	const h = React.createElement;
 
@@ -30,23 +29,23 @@ module.exports = (meta) => {
 		});
 	}
 
-	let useStateFromStores = (stores, cb) => cb();
-	{
-		const mangled = Webpack.getMangled(m => m.Store, {useStateFromStores: BdApi.Webpack.Filters.byStrings("useStateFromStores")}, { raw: true });
-
-		useStateFromStores = mangled.useStateFromStores ?? useStateFromStores;
-	}
-
 	let Section;
 	let Text;
 
 	UserProfileModalV2Promise.then(() => {
-		Section = Webpack.getByStrings(".section", "text-xs/medium", "headingColor");
-		Text = ((Text) => typeof Text.render === "function" ? Text : Object.values(Text)[0])(Webpack.getBySource("data-text-variant"));
+		({Section, TextBase: {Text}} = Webpack.getBulkKeyed({
+			Section: {
+				filter: Webpack.Filters.byStrings(".section", "text-xs/medium", "headingColor")
+			},
+			TextBase: {
+				filter: Webpack.Filters.bySource("data-text-variant"),
+				searchDefault: false,
+				map: {
+					Text: () => true
+				}
+			},
+		}));
 	});
-
-	const RelationshipStore = Webpack.getStore("RelationshipStore");
-	const LocaleStore = Webpack.getStore("LocaleStore");
 
 	function useHeading(locale) {
 		return React.useMemo(() => {
@@ -88,13 +87,13 @@ module.exports = (meta) => {
 	}
 
 	function FriendsSince({ userId }) {
-		const since = useStateFromStores([RelationshipStore], () => {
-			if (!RelationshipStore.isFriend(userId)) return null;
+		const since = Hooks.useStateFromStores(Webpack.Stores.RelationshipStore, () => {
+			if (!Webpack.Stores.RelationshipStore.isFriend(userId)) return null;
 			
-			return RelationshipStore.getSince(userId);
+			return Webpack.Stores.RelationshipStore.getSince(userId);
 		});
 
-		const locale = useStateFromStores([LocaleStore], () => LocaleStore.locale);
+		const locale = Hooks.useStateFromStores(Webpack.Stores.LocaleStore, () => Webpack.Stores.LocaleStore.locale);
 
 		const time = React.useMemo(() => since && getCreatedAt(since, locale), [since, locale]);
 
@@ -108,7 +107,7 @@ module.exports = (meta) => {
 				variant: "text-xs/medium",
 				children: time
 			})
-		})
+		});
 	}
 
 	const [race, reject] = (() => {
@@ -129,7 +128,7 @@ module.exports = (meta) => {
 			const UserProfileModalV2 = await race(UserProfileModalV2Promise);			
 
 			if (!UserProfileModalV2) {
-				BdApi.UI.showToast("FriendsSince failed to load!.", {type: "error"});
+				UI.showToast("FriendsSince failed to load!.", {type: "error"});
 				return;
 			}
 
