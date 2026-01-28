@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.12
+ * @version 1.0.13
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -16,7 +16,7 @@ module.exports = (meta) => {
 	});
 
 	function findInReactTree(tree, filter) {
-		return Utils.findInTree(tree, filter, { walkable: ["props", "children"] });
+		return Utils.findInTree(tree, filter, {walkable: ["props", "children"]});
 	}
 
 	function getCreatedAt(value, lang) {
@@ -35,7 +35,7 @@ module.exports = (meta) => {
 	UserProfileModalV2Promise.then(() => {
 		({Section, TextBase: {Text}} = Webpack.getBulkKeyed({
 			Section: {
-				filter: Webpack.Filters.byStrings(".section", "text-xs/medium", "headingColor")
+				filter: Webpack.Filters.byStrings("Reflect", "text-xs/medium", "headingColor")
 			},
 			TextBase: {
 				filter: Webpack.Filters.bySource("data-text-variant"),
@@ -86,10 +86,10 @@ module.exports = (meta) => {
 		}, [locale]);
 	}
 
-	function FriendsSince({ userId }) {
+	function FriendsSince({userId}) {
 		const since = Hooks.useStateFromStores(Webpack.Stores.RelationshipStore, () => {
 			if (!Webpack.Stores.RelationshipStore.isFriend(userId)) return null;
-			
+
 			return Webpack.Stores.RelationshipStore.getSince(userId);
 		});
 
@@ -97,7 +97,7 @@ module.exports = (meta) => {
 
 		const time = React.useMemo(() => since && getCreatedAt(since, locale), [since, locale]);
 
-		const heading = useHeading(locale);		
+		const heading = useHeading(locale);
 
 		if (!time) return null;
 
@@ -125,24 +125,24 @@ module.exports = (meta) => {
 
 	return {
 		async start() {
-			const UserProfileModalV2 = await race(UserProfileModalV2Promise);			
+			const UserProfileModalV2 = await race(UserProfileModalV2Promise);
 
 			if (!UserProfileModalV2) {
 				UI.showToast("FriendsSince failed to load!.", {type: "error"});
 				return;
 			}
 
-			Patcher.after(UserProfileModalV2, "Z", (_, [props], ret) => {
-				const profileBody = findInReactTree(ret, (e) => e?.className?.includes("profileBody"));				
+			Patcher.after(UserProfileModalV2, "A", (_, [props], ret) => {
+				const profileBody = findInReactTree(ret, (e) => e?.className?.includes("profileBody"));
 
 				if (!profileBody) return;
 
 				const index = profileBody.children.findIndex((e) => React.isValidElement(e) && e.props.heading && e.props?.children?.props?.userId);
 
 				if (index === -1) return;
-				
+
 				profileBody.children.splice(index + 1, 0,
-					h(FriendsSince, { userId: props.user.id })
+					h(FriendsSince, {userId: props.user.id})
 				);
 			});
 		},
@@ -150,5 +150,5 @@ module.exports = (meta) => {
 			reject();
 			Patcher.unpatchAll();
 		}
-	}
+	};
 };
