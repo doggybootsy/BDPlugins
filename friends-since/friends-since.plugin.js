@@ -2,7 +2,7 @@
  * @name FriendsSince
  * @author Doggybootsy
  * @description Shows the date of when and a friend became friends
- * @version 1.0.13
+ * @version 1.0.14
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
@@ -35,7 +35,7 @@ module.exports = (meta) => {
 	UserProfileModalV2Promise.then(() => {
 		({Section, TextBase: {Text}} = Webpack.getBulkKeyed({
 			Section: {
-				filter: Webpack.Filters.byStrings("Reflect", "text-xs/medium", "headingColor")
+				filter: Webpack.Filters.byStrings("()(", "text-xs/medium", "headingColor")
 			},
 			TextBase: {
 				filter: Webpack.Filters.bySource("data-text-variant"),
