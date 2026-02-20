@@ -2,14 +2,14 @@
  * @name MobileForAll
  * @author Doggybootsy
  * @description Make the mobile indicator have priority instead of the VR or desktop indicators
- * @version 1.0.0
+ * @version 1.0.1
  * @source https://github.com/doggybootsy/BDPlugins/
  */
 
 module.exports = (meta) => {
 	const BdApi = new window.BdApi(meta.name);
 
-	const {Patcher, React} = BdApi;
+	const {Patcher, React, ReactUtils} = BdApi;
 	const {Filters, getBulkKeyed, Stores} = BdApi.Webpack;
 
 	const { Mask, StatusIndicatorMask, AvatarMask, Sizes, IndicatorSizes } = getBulkKeyed({
@@ -228,7 +228,6 @@ module.exports = (meta) => {
 		return null
 	}
 
-
 	function getBackgroundRect(e, t, n, isWhat) {		
 		let l = AvatarMask.getRect(t, n, isWhat)
 			, u = StatusIndicatorMask.getStatusBackgroundColor(n, e);
@@ -294,9 +293,12 @@ module.exports = (meta) => {
 				return !!Stores.PresenceStore.getClientStatus(userId)?.mobile;
 			});
 
-			const cache = new WeakMap();
+			const patcher = ReactUtils.createNodePatcher();
 			
 			Patcher.after(AvatarMask, "Avatar", (that, [props], ret) => {
+				const propsRef = React.useRef(props);
+				propsRef.current = props;
+
 				if (typeof ret?.props?.children?.props?.children?.[1]?.props?.mask === "string" && props.status !== "unknown") {
 					ret.props.children.props.children[1].props.mask = `url(#${getMaskId(
 						props.status, props.size, props.isMobile, props.isTyping, props.isVR
@@ -321,27 +323,17 @@ module.exports = (meta) => {
 					);
 				}
 
-				let newType = cache.get(ret.type);
-				if (!newType) {
-					const orig = ret.type;
+				ret.props.__mfaParentProps = propsRef;
 
-					newType = (props) => {
-						const res = orig(props);
+				patcher.patch(ret, (_, res) => {
+					const props = _.__mfaParentProps?.current;
 
-						if (res?.props?.children?.[1]?.props?.children?.props?.mask) {
-							const mask = getDecorationMaskId(props.status, props.size, props.isMobile, props.isTyping);
-							
-							if (mask) res.props.children[1].props.children.props.mask = `url(#${mask})`;
-						}
-
-						return res;
+					if (props && res?.props?.children?.[1]?.props?.children?.props?.mask) {						
+						const mask = getDecorationMaskId(props.status, props.size, props.isMobile, props.isTyping);
+						
+						if (mask) res.props.children[1].props.children.props.mask = `url(#${mask})`;
 					}
-
-					cache.set(ret.type, newType);
-					cache.set(newType, newType);
-				}
-
-				ret.type = newType;
+				});
 			});
 
 			Patcher.after(AvatarMask.SmartAvatar, "type", (that, [props], ret) => {
