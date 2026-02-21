@@ -2,8 +2,8 @@
  * @name MobileForAll
  * @author Doggybootsy
  * @description Make the mobile indicator have priority instead of the VR or desktop indicators
- * @version 1.0.1
- * @source https://github.com/doggybootsy/BDPlugins/
+ * @version 1.0.2
+ * @source https://github.com/doggybootsy/BDPlugins/blob/main/mobile-for-all/MobileForAll.plugin.js
  */
 
 module.exports = (meta) => {
@@ -12,7 +12,7 @@ module.exports = (meta) => {
 	const {Patcher, React, ReactUtils} = BdApi;
 	const {Filters, getBulkKeyed, Stores} = BdApi.Webpack;
 
-	const { Mask, StatusIndicatorMask, AvatarMask, Sizes, IndicatorSizes } = getBulkKeyed({
+	const {Mask, StatusIndicatorMask, AvatarMask, Sizes, IndicatorSizes} = getBulkKeyed({
 		Mask: {
 			filter: m => typeof m === "function" && m.Masks
 		},
@@ -36,7 +36,7 @@ module.exports = (meta) => {
 			}
 		},
 		Sizes: {
-			filter: m => m.SIZE_16 && m.SIZE_120, 
+			filter: m => m.SIZE_16 && m.SIZE_120,
 			searchExports: true
 		},
 		IndicatorSizes: {
@@ -46,7 +46,7 @@ module.exports = (meta) => {
 				getDimensions: m => typeof m === "function" && !String(m).includes("number")
 			}
 		}
-	});	
+	});
 
 	function getMaskId(status, size, isMobile, isTyping) {
 		if (null == status)
@@ -105,8 +105,8 @@ module.exports = (meta) => {
 				case Sizes.SIZE_96:
 					return Mask.Masks.AVATAR_STATUS_MOBILE_96;
 				case Sizes.SIZE_120:
-					return Mask.Masks.AVATAR_STATUS_MOBILE_120
-				}
+					return Mask.Masks.AVATAR_STATUS_MOBILE_120;
+			}
 
 		switch (size) {
 			case Sizes.SIZE_16:
@@ -135,7 +135,7 @@ module.exports = (meta) => {
 				return Mask.Masks.AVATAR_STATUS_ROUND_120;
 		}
 
-		throw Error(`getMaskId(): Unsupported type, size: ${size}, status: ${status}, isMobile: ${isMobile ? "true" : "false"}`)
+		throw Error(`getMaskId(): Unsupported type, size: ${size}, status: ${status}, isMobile: ${isMobile ? "true" : "false"}`);
 	}
 
 	function getDecorationMaskId(status, size, isMobile, isTyping) {
@@ -167,7 +167,7 @@ module.exports = (meta) => {
 				case Sizes.SIZE_96:
 					return Mask.Masks.AVATAR_DECORATION_STATUS_TYPING_96;
 				case Sizes.SIZE_120:
-					return Mask.Masks.AVATAR_DECORATION_STATUS_TYPING_120
+					return Mask.Masks.AVATAR_DECORATION_STATUS_TYPING_120;
 			}
 
 		if (isMobile)
@@ -195,7 +195,7 @@ module.exports = (meta) => {
 				case Sizes.SIZE_96:
 					return Mask.Masks.AVATAR_DECORATION_STATUS_MOBILE_96;
 				case Sizes.SIZE_120:
-					return Mask.Masks.AVATAR_DECORATION_STATUS_MOBILE_120
+					return Mask.Masks.AVATAR_DECORATION_STATUS_MOBILE_120;
 			}
 
 		switch (size) {
@@ -222,13 +222,13 @@ module.exports = (meta) => {
 			case Sizes.SIZE_96:
 				return Mask.Masks.AVATAR_DECORATION_STATUS_ROUND_96;
 			case Sizes.SIZE_120:
-				return Mask.Masks.AVATAR_DECORATION_STATUS_ROUND_120
+				return Mask.Masks.AVATAR_DECORATION_STATUS_ROUND_120;
 		}
 
-		return null
+		return null;
 	}
 
-	function getBackgroundRect(e, t, n, isWhat) {		
+	function getBackgroundRect(e, t, n, isWhat) {
 		let l = AvatarMask.getRect(t, n, isWhat)
 			, u = StatusIndicatorMask.getStatusBackgroundColor(n, e);
 
@@ -244,14 +244,14 @@ module.exports = (meta) => {
 				r: n,
 				cx: i,
 				cy: i
-			})
+			});
 		}
 
 		let d = l.height + 2 * t.stroke
 			, _ = l.width + 2 * t.stroke
 			, f = l.x - t.stroke
 			, h = l.y - t.stroke;
-		
+
 		return React.createElement("rect", {
 			fill: e,
 			height: d,
@@ -262,12 +262,14 @@ module.exports = (meta) => {
 			x: f,
 			y: h,
 			rx: t.stroke
-		})
-	}	
+		});
+	}
+
+	const nodePatcher = ReactUtils.createNodePatcher();
 
 	return {
 		start() {
-			Patcher.before(StatusIndicatorMask, "getMaskId", (that, args) => {				
+			Patcher.before(StatusIndicatorMask, "getMaskId", (that, args) => {
 				if (args[1]?.isMobile) {
 					args[0] = "online";
 
@@ -277,8 +279,8 @@ module.exports = (meta) => {
 					};
 				}
 			});
-			
-			Patcher.before(AvatarMask, "getRect", (that, args, ret) => {
+
+			Patcher.before(AvatarMask, "getRect", (that, args) => {
 				if (args[2]?.isMobile) {
 					args[1] = "online";
 
@@ -288,13 +290,13 @@ module.exports = (meta) => {
 					};
 				}
 			});
-			
+
 			Patcher.instead(Stores.PresenceStore, "isMobileOnline", (that, [userId]) => {
-				return !!Stores.PresenceStore.getClientStatus(userId)?.mobile;
+				const status = Stores.PresenceStore.getClientStatus(userId);
+
+				return status && !!status.mobile && (status.mobile !== "unknown" || status.mobile === "offline");
 			});
 
-			const patcher = ReactUtils.createNodePatcher();
-			
 			Patcher.after(AvatarMask, "Avatar", (that, [props], ret) => {
 				const propsRef = React.useRef(props);
 				propsRef.current = props;
@@ -305,7 +307,7 @@ module.exports = (meta) => {
 					)})`;
 				}
 
-				if (ret?.props?.children?.props?.children?.[2]) {					
+				if (ret?.props?.children?.props?.children?.[2]) {
 					ret.props.children.props.children[2] = getBackgroundRect(props.statusBackdropColor, IndicatorSizes.getDimensions(props.size), props.status !== "unknown" ? props.status : null, {
 						isMobile: props.isMobile,
 						isTyping: props.isTyping,
@@ -314,7 +316,7 @@ module.exports = (meta) => {
 				}
 
 				if (typeof ret?.props?.children?.props?.children?.[3]?.props?.children?.props?.children?.[0]?.props === "object") {
-					Object.assign(ret.props.children.props.children[3].props.children.props.children[0].props, 
+					Object.assign(ret.props.children.props.children[3].props.children.props.children[0].props,
 						AvatarMask.getRect(IndicatorSizes.getDimensions(props.size), props.status !== "unknown" ? props.status : null, {
 							isMobile: props.isMobile,
 							isTyping: props.isTyping,
@@ -324,13 +326,12 @@ module.exports = (meta) => {
 				}
 
 				ret.props.__mfaParentProps = propsRef;
-
-				patcher.patch(ret, (_, res) => {
+				nodePatcher.patch(ret, (_, res) => {
 					const props = _.__mfaParentProps?.current;
 
-					if (props && res?.props?.children?.[1]?.props?.children?.props?.mask) {						
+					if (props && res?.props?.children?.[1]?.props?.children?.props?.mask) {
 						const mask = getDecorationMaskId(props.status, props.size, props.isMobile, props.isTyping);
-						
+
 						if (mask) res.props.children[1].props.children.props.mask = `url(#${mask})`;
 					}
 				});
@@ -342,6 +343,7 @@ module.exports = (meta) => {
 		},
 		stop() {
 			Patcher.unpatchAll();
+			nodePatcher.dispose();
 		}
-	}
-}
+	};
+};
