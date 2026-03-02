@@ -2,7 +2,7 @@
  * @name MobileForAll
  * @author Doggybootsy
  * @description Make the mobile indicator have priority instead of the VR or desktop indicators
- * @version 1.0.2
+ * @version 1.0.3
  * @source https://github.com/doggybootsy/BDPlugins/blob/main/mobile-for-all/MobileForAll.plugin.js
  */
 
