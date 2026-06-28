@@ -1,7 +1,7 @@
 /**
  * @name Steam Workshop Embed
  * @description Embed steam workshop items
- * @version 0.0.1
+ * @version 0.0.2
  * @author doggybootsy
  */
 
@@ -309,11 +309,11 @@ module.exports = (meta) => {
 				});
 		},
 		stop() {
-			Webpack.Stores.UserStore._dispatcher.subscribe("LOAD_MESSAGES_SUCCESS", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.subscribe("LOCAL_MESSAGES_LOADED", handleEvent);
+			Webpack.Stores.UserStore._dispatcher.unsubscribe("LOAD_MESSAGES_SUCCESS", handleEvent);
+			Webpack.Stores.UserStore._dispatcher.unsubscribe("LOCAL_MESSAGES_LOADED", handleEvent);
 			Webpack.Stores.UserStore._dispatcher.unsubscribe("CACHE_LOADED", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.subscribe("MESSAGE_UPDATE", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.subscribe("MESSAGE_CREATE", handleEvent);
+			Webpack.Stores.UserStore._dispatcher.unsubscribe("MESSAGE_UPDATE", handleEvent);
+			Webpack.Stores.UserStore._dispatcher.unsubscribe("MESSAGE_CREATE", handleEvent);
 			Patcher.unpatchAll();
 			
 			Object.values(ChannelMessages._channelMessages)
