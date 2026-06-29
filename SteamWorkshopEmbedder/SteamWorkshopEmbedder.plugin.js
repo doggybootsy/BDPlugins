@@ -6,38 +6,13 @@
  */
 
 /**
- * @typedef {{
- * 		title: string,
- * 		author: {
- * 			name: string,
- * 			url: string,
- * 			avatar: string
- * 		},
- * 		color: number,
- * 		description: string,
- * 		subscriptions: number,
- * 		favorited: number,
- * 		followers: number,
- * 		tags: string[],
- * 		time: {
- * 			updated: number,
- * 			created: number
- * 		},
- * 		thumbnail: {
- * 			content_type: string,
- * 			width: number,
- * 			height: number,
- * 			placeholder: string,
- * 			url: string
- * 		},
- * 		id: string
- * }} WorkshopItem
- */
-
-/**
  * @typedef {import("./bdapi")} BdApi
  */
 
+/**
+ * @param {string} url 
+ * @returns {string | null}
+ */
 function getWorkshopId(url) {
 	if (
 		url.hostname === "steamcommunity.com" &&
@@ -65,7 +40,6 @@ function getWorkshopId(url) {
 }
 
 /**
- * 
  * @param {string} content 
  * @returns {string[]}
  */
@@ -132,7 +106,9 @@ function extrackWorkshopCodes(content) {
 const MAX_EMBEDS = 10;
 
 module.exports = (meta) => {
-	const {Webpack, Patcher, Data, Logger} = new window.BdApi(meta.name);
+	const {Webpack, Patcher, Logger, Utils, Data, UI, React} = new window.BdApi(meta.name);
+
+	const h = React.createElement;
 
 	const {i18n, ChannelMessages, EmbedHandler} = Webpack.getBulkKeyed({
 		i18n: {
@@ -147,82 +123,54 @@ module.exports = (meta) => {
 				handle: Webpack.Filters.byStrings("embed_")
 			}
 		}
-	});	
+	});
 
-	/**
-	 * 
-	 * @param {WorkshopItem} workshopItem 
-	 * @returns 
-	 */
-	function convertToDiscordEmbed(workshopItem) {
-		return {
-			author: {
-				name: workshopItem.author.name,
-				url: workshopItem.author.url,
-				icon_url: workshopItem.author.avatar,
-				proxy_icon_url: workshopItem.author.avatar
-			},
-			color: workshopItem.color,
-			content_scan_version: 4,
-			description: workshopItem.description,
-			fields: [
-				{
-					inline: true,
-					name: "Subscriptions",
-					value: workshopItem.subscriptions.toString(),
-				},
-				{
-					inline: true,
-					name: "Favorited",
-					value: workshopItem.favorited.toString(),
-				},
-				{
-					inline: true,
-					name: "Followers",
-					value: workshopItem.followers.toString(),
-				},
-				{
-					inline: false,
-					name: "Tags",
-					value: i18n.intl.data.formatList(workshopItem.tags)
-				}
-			],
-			footer: {
-				text: "Last Updated"
-			},
-			thumbnail: {
-				...workshopItem.thumbnail,
-				proxy_url: workshopItem.thumbnail.url,
-				flags: 0
-			},
-			timestamp: new Date(workshopItem.time.updated * 1000),
-			title: workshopItem.title,
-			type: "rich",
-			url: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + workshopItem.id
-		}
-	}
+	const FluxDispatcher = Webpack.Stores.UserStore._dispatcher;
 
-	const workshop = {
-		_cachePromises: {},
-		_cacheSync: {},
+	const workshop = new class extends Utils.Store {
+		/** @type {Record<string, Promise<object>>} */
+		_cachePromises = {}
+		/** @type {Record<string, object>} */
+		syncCache = {}
+
 		async fetch(code) {
-			const res = await BdApi.Net.fetch(`https://doggybootsy.com/api/v1/plugins/SteamWorkshopEmbedder/${code}`);			
+			const url = Data.load("url") ?? "https://doggybootsy.com/api/v1/plugins/SteamWorkshopEmbedder/%c";
 
-			return Object.assign(workshop._cacheSync[code] = convertToDiscordEmbed(await res.json()), {
-				__SteamWorkshopEmbedder: code
-			});
-		},
+			const res = await BdApi.Net.fetch(url.replace("%c", code));
+
+			try {
+				return Object.assign(workshop.syncCache[code] = (await res.json()).embed, {
+					__SteamWorkshopEmbedder: code
+				});
+			}
+			finally {
+				workshop.emitChange();
+			}
+		}
+
 		getSync(code) {
-			return workshop._cacheSync[code];
-		},
+			return workshop.syncCache[code];
+		}
+
 		getOrFetch(code) {
 			return workshop._cachePromises[code] ??= workshop.fetch(code)
+				.then((item) => {
+					setTimeout(() => {
+						delete workshop._cachePromises[code];
+						delete workshop.syncCache[code];
+						workshop.emitChange();
+					}, 30 * 60 * 1000);
+
+					return item;
+				})
 				.catch((e) => {
 					Logger.error("Failed to fetch " + code, e);
 
 					setTimeout(() => {
-						delete workshop._cachePromises[code]
+						delete workshop._cachePromises[code];
+						workshop.emitChange();
 					}, 1000);
+
 					throw e;
 				});
 		}
@@ -245,7 +193,7 @@ module.exports = (meta) => {
 
 			if (embeds.length === message.embeds.length) return;
 
-			Webpack.Stores.UserStore._dispatcher.dispatch({
+			FluxDispatcher.dispatch({
 				type: "MESSAGE_UPDATE",
 				guildId: message.guild_id,
 				message: {
@@ -287,11 +235,11 @@ module.exports = (meta) => {
 		workshop,
 
 		start() {
-			Webpack.Stores.UserStore._dispatcher.subscribe("LOAD_MESSAGES_SUCCESS", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.subscribe("CACHE_LOADED", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.subscribe("LOCAL_MESSAGES_LOADED", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.subscribe("MESSAGE_UPDATE", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.subscribe("MESSAGE_CREATE", handleEvent);
+			FluxDispatcher.subscribe("LOAD_MESSAGES_SUCCESS", handleEvent);
+			FluxDispatcher.subscribe("CACHE_LOADED", handleEvent);
+			FluxDispatcher.subscribe("LOCAL_MESSAGES_LOADED", handleEvent);
+			FluxDispatcher.subscribe("MESSAGE_UPDATE", handleEvent);
+			FluxDispatcher.subscribe("MESSAGE_CREATE", handleEvent);
 
 			Patcher.after(EmbedHandler, "handle", (_, [__, ___, embed], res) => {
 				if (typeof res === "object") res.__SteamWorkshopEmbedder = embed.__SteamWorkshopEmbedder;
@@ -300,8 +248,6 @@ module.exports = (meta) => {
 			Object.values(ChannelMessages._channelMessages)
 				.flatMap(x => x._array).forEach(message => {
 					if (!message?.content) return;
-
-					
 					
 					const codes = extrackWorkshopCodes(message.content);
 
@@ -309,11 +255,16 @@ module.exports = (meta) => {
 				});
 		},
 		stop() {
-			Webpack.Stores.UserStore._dispatcher.unsubscribe("LOAD_MESSAGES_SUCCESS", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.unsubscribe("LOCAL_MESSAGES_LOADED", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.unsubscribe("CACHE_LOADED", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.unsubscribe("MESSAGE_UPDATE", handleEvent);
-			Webpack.Stores.UserStore._dispatcher.unsubscribe("MESSAGE_CREATE", handleEvent);
+			workshop._cachePromises = {};
+			workshop.syncCache = {};
+			workshop.emitChange();
+
+			FluxDispatcher.unsubscribe("LOAD_MESSAGES_SUCCESS", handleEvent);
+			FluxDispatcher.unsubscribe("LOCAL_MESSAGES_LOADED", handleEvent);
+			FluxDispatcher.unsubscribe("CACHE_LOADED", handleEvent);
+			FluxDispatcher.unsubscribe("MESSAGE_UPDATE", handleEvent);
+			FluxDispatcher.unsubscribe("MESSAGE_CREATE", handleEvent);
+
 			Patcher.unpatchAll();
 			
 			Object.values(ChannelMessages._channelMessages)
@@ -327,9 +278,26 @@ module.exports = (meta) => {
 							index--;
 						}
 					}
+
+					const codes = extrackWorkshopCodes(message.content);
+
+					if (codes.length) handleMessage(message, codes, false);
 				});
 			
-			Webpack.Stores.MessageStore.emitChange()
+			Webpack.Stores.MessageStore.emitChange();
+		},
+		getSettingsPanel() {
+			return UI.buildSettingItem({
+				type: "text",
+				name: "URL",
+				note: [
+					h("p", {}, "The URL that gets requested to get the embed"),
+					h("p", {}, "%c will be replaced with the workshop code"),
+				],
+				value: Data.load("url") ?? "https://doggybootsy.com/api/v1/plugins/SteamWorkshopEmbedder/%c",
+				onChange: Data.save.bind(Data, "url"),
+				inline: false
+			})
 		}
 	}
 }
